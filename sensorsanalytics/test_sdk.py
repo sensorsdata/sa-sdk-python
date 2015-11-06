@@ -6,7 +6,7 @@ import unittest
 from sdk import *
 
 
-TEST_URL_PREFIX = 'http://git.sensorsdata.cn/test'
+TEST_URL_PREFIX = 'http://test.sensorsdata.cn/test'
 
 
 class NormalTest(unittest.TestCase):
