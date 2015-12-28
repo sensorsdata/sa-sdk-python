@@ -6,7 +6,7 @@ import unittest
 from sdk import *
 
 
-TEST_URL_PREFIX = 'http://test.sensorsdata.cn/test'
+TEST_URL_PREFIX = 'http://sensorsdata.cn/test'
 
 
 class NormalTest(unittest.TestCase):
@@ -77,6 +77,8 @@ class NormalTest(unittest.TestCase):
 
         assertRaisesRegex(SensorsAnalyticsIllegalDataException, "property \[distinct_id\] must not be empty", sa.track, None,
                                'Test', {'From': 'Baidu'})
+        assertRaisesRegex(SensorsAnalyticsIllegalDataException, "the max length of property \[distinct_id\] is 255", sa.track, 'abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz',
+                               'Test', {'From': 'Baidu'})
         assertRaisesRegex(SensorsAnalyticsIllegalDataException, ".*must be a timestamp in microseconds.*",
                                sa.track, 1234, 'Test', {'From': 'Baidu', '$time': 1234})
         assertRaisesRegex(SensorsAnalyticsIllegalDataException, ".*property key must be a valid variable name.*",
@@ -96,6 +98,13 @@ class NormalTest(unittest.TestCase):
         assertRaisesRegex(SensorsAnalyticsIllegalDataException, ".*property's value must be a str.* ",
                                sa.track, 1234, 'TestEvent', {'TestProperty': [123]})
         sa.profile_set(1234, {'From': 'Baidu', 'asd': ["asd", "bbb"]})
+        # 'distinct_id' is reserved keyword
+        assertRaisesRegex(SensorsAnalyticsIllegalDataException, ".*property key must be a valid variable nam.*",
+                               sa.track, 1234, 'TestEvent', {'distincT_id': 'a'})
+        # max length is 100
+        assertRaisesRegex(SensorsAnalyticsIllegalDataException, ".*property key must be a valid variable nam.*",
+                               sa.track, 1234, 'TestEvent', {'a123456789a123456789a123456789a123456789a123456789a123456789a123456789a123456789a123456789a1234567891': 'a'})
+        sa.track(1234, 'TestEvent', {'a123456789a123456789a123456789a123456789a123456789a123456789a123456789a123456789a123456789a123456789': 'a'})
 
     def testDefaultConsumer(self):
         consumer = DefaultConsumer(TEST_URL_PREFIX)

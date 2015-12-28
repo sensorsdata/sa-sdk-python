@@ -18,7 +18,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.1.0'
+SDK_VERSION = '1.2.0'
 
 try:
     isinstance("", basestring)
@@ -59,7 +59,7 @@ class SensorsAnalytics(object):
     使用一个 SensorsAnalytics 的实例来进行数据发送。
     """
 
-    NAME_PATTERN = re.compile(r"^[a-zA-Z_$][a-zA-Z\d_$]*$")
+    NAME_PATTERN = re.compile(r"^((?!^distinct_id$|^original_id$|^time$|^properties$|^id$|^first_id$|^second_id$|^users$|^events$|^event$|^user_id$|^date$|^datetime$)[a-zA-Z_$][a-zA-Z\d_$]{0,99})$", re.I)
 
     class DatetimeSerializer(json.JSONEncoder):
         """
@@ -140,6 +140,11 @@ class SensorsAnalytics(object):
             'original_id': original_id,
             'properties': all_properties,
         }
+        # 检查 original_id
+        if data["original_id"] is None or len(str(data['original_id'])) == 0:
+            raise SensorsAnalyticsIllegalDataException("property [original_id] must not be empty")
+        if len(str(data['original_id'])) > 255:
+            raise SensorsAnalyticsIllegalDataException("the max length of property [original_id] is 255")
         data = self._normalize_data(data)
         self._consumer.send(self._json_dumps(data))
 
@@ -148,6 +153,8 @@ class SensorsAnalytics(object):
         # 检查 distinct_id
         if data["distinct_id"] is None or len(str(data['distinct_id'])) == 0:
             raise SensorsAnalyticsIllegalDataException("property [distinct_id] must not be empty")
+        if len(str(data['distinct_id'])) > 255:
+            raise SensorsAnalyticsIllegalDataException("the max length of property [distinct_id] is 255")
         data['distinct_id'] = str(data['distinct_id'])
 
         # 检查 time
@@ -178,7 +185,7 @@ class SensorsAnalytics(object):
 
                 if not is_str(value) and not is_int(value) and not isinstance(value, float)\
                         and not isinstance(value, datetime.datetime) and not isinstance(value, datetime.date)\
-                        and not isinstance(value, list):
+                        and not isinstance(value, list) and value is not None:
                     raise SensorsAnalyticsIllegalDataException(
                         "property value must be a str/int/float/datetime/date/list. [value=%s]" % type(value))
                 if isinstance(value, list):
@@ -215,6 +222,12 @@ class SensorsAnalytics(object):
         直接设置一个用户的 Profile，如果已存在则覆盖。
         """
         return self._profile_update('profile_set', distinct_id, profiles)
+
+    def profile_set_once(self, distinct_id, profiles):
+        """
+        直接设置一个用户的 Profile，如果某个 Profile 已存在则不设置。
+        """
+        return self._profile_update('profile_set_once', distinct_id, profiles)
 
     def profile_increment(self, distinct_id, profiles):
         """
