@@ -6,7 +6,8 @@ import unittest
 from sdk import *
 
 
-TEST_URL_PREFIX = 'http://sensorsdata.cn/test'
+TEST_URL_PREFIX = 'http://git.sensorsdata.cn/test'
+TEST_DEBUG_URL_PREFIX = 'http://10.10.229.134:8001/debug'
 
 
 class NormalTest(unittest.TestCase):
@@ -48,6 +49,15 @@ class NormalTest(unittest.TestCase):
 
     def clear_msg_counter(self):
         self.msg_counter = 0
+
+    def testDebug(self):
+        consumer = DebugConsumer(TEST_DEBUG_URL_PREFIX, False)
+        sa = SensorsAnalytics(consumer)
+        sa.track(1234, 'Test', {'From': 'Baidu'})
+        consumer = DebugConsumer(TEST_DEBUG_URL_PREFIX, True)
+        sa = SensorsAnalytics(consumer)
+        sa.track(1234, 'Test', {'From': 456})
+        sa.track(1234, 'Test', {'From': 'Baidu'})
 
     def testNormal(self):
         consumer = DefaultConsumer(TEST_URL_PREFIX)

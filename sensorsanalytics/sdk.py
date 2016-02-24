@@ -18,7 +18,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.2.0'
+SDK_VERSION = '1.3.0'
 
 try:
     isinstance("", basestring)
@@ -54,6 +54,13 @@ class SensorsAnalyticsNetworkException(SensorsAnalyticsException):
     pass
 
 
+class SensorsAnalyticsDebugException(Exception):
+    """
+    Debug模式专用的异常
+    """
+    pass
+
+
 class SensorsAnalytics(object):
     """
     使用一个 SensorsAnalytics 的实例来进行数据发送。
@@ -82,9 +89,10 @@ class SensorsAnalytics(object):
         初始化一个 SensorsAnalytics 的实例。可以选择使用默认的 DefaultConsumer，也可以选择其它的 Consumer 实现。
 
         已实现的 Consumer 包括:
-        DefaultConsumer: 默认实现，逐条、同步的发送数据。
-        BatchConsumer: 批量、同步的发送数据。
-        AsyncBatchConsumer: 批量、异步的发送数据。
+        DefaultConsumer: 默认实现，逐条、同步的发送数据;
+        BatchConsumer: 批量、同步的发送数据;
+        AsyncBatchConsumer: 批量、异步的发送数据;
+        DebugConsumer:专门用于调试，逐条、同步地发送数据到专用的Debug接口，并且如果数据有异常会退出并打印异常原因
         """
         self._consumer = consumer
 
@@ -278,25 +286,6 @@ class SensorsAnalytics(object):
         如果发生意外，此方法将抛出异常。
         """
         self._consumer.close()
-
-
-class DebugConsumer(object):
-    """
-    调试用的 Consumer，直接输出数据。
-    """
-
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def send(msg):
-        print(msg)
-
-    def flush(self):
-        pass
-
-    def close(self):
-        pass
 
 
 class DefaultConsumer(object):
@@ -513,3 +502,80 @@ class AsyncBatchConsumer(DefaultConsumer):
         # 循环发送，直到队列和发送缓存都为空
         while not self._queue.empty() or not len(self._flush_buffer) == 0:
             self.sync_flush(True)
+
+
+class DebugConsumer(object):
+    """
+    调试用的 Consumer，逐条发送数据到服务器的Debug API,并且等待服务器返回的结果
+    具体的说明在http://www.sensorsdata.cn/manual/
+    """
+
+    def __init__(self, debug_url_prefix, debug_write_data=True, request_timeout=None):
+        """
+        初始化Consumer
+        :param debug_url_prefix: 服务器提供的用于Debug的API的URL地址,特别注意,它与导入数据的API并不是同一个
+        :param debug_write_data: 发送过去的数据,是真正写入,还是仅仅进行检查
+        :param request_timeout:请求的超时时间,单位毫秒
+        :return:
+        """
+        if not debug_url_prefix.endswith('debug'):
+            print('please init with debug API url.')
+            raise SensorsAnalyticsDebugException()
+        self._debug_url_prefix = debug_url_prefix
+        self._request_timeout = request_timeout
+        self._debug_write_data = debug_write_data
+
+    @staticmethod
+    def _gzip_string(data):
+        try:
+            return gzip.compress(data)
+        except AttributeError:
+            import StringIO
+
+            buf = StringIO.StringIO()
+            fd = gzip.GzipFile(fileobj=buf, mode="w")
+            fd.write(data)
+            fd.close()
+            return buf.getvalue()
+
+    def _do_request(self, data):
+        """
+        使用 urllib 发送数据给服务器，如果发生错误会抛出异常。
+        response的结果,会返回
+        """
+        encoded_data = urllib.urlencode(data).encode('utf8')
+        try:
+            request = urllib2.Request(self._debug_url_prefix, encoded_data)
+            if not self._debug_write_data:      # 说明只检查,不真正写入数据
+                request.add_header('Dry-Run', 'true')
+            if self._request_timeout is not None:
+                response = urllib2.urlopen(request, timeout=self._request_timeout)
+            else:
+                response = urllib2.urlopen(request)
+        except urllib2.HTTPError as e:
+            return e
+        return response
+
+    def send(self, msg):
+        response = self._do_request({
+            'data': self._encode_msg(msg),
+            'gzip': 1
+        })
+        print('==========================================================================')
+        ret_code = response.code
+        if ret_code == 200:
+            print('valid message: %s' % msg)
+        else:
+            print('invalid message: %s' % msg)
+            print('ret_code: %s' % ret_code)
+            print('ret_content: %s' % response.read().decode('utf8'))
+            raise SensorsAnalyticsDebugException()
+
+    def _encode_msg(self, msg):
+        return base64.b64encode(self._gzip_string(msg.encode('utf8')))
+
+    def flush(self):
+        pass
+
+    def close(self):
+        pass
