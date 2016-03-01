@@ -1,7 +1,8 @@
-# sa-sdk-python
+# Sensors Analytics
 
 This is the official Python SDK for Sensors Analytics.
 
-Current version: 1.3.0
+## To learn more
 
-To Learn More: http://www.sensorsdata.cn/manual/python_sdk.html
+See our [full manual](http://www.sensorsdata.cn/manual/python_sdk.html)
+
