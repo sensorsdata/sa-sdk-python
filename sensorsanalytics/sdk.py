@@ -18,7 +18,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.3.0'
+SDK_VERSION = '1.3.1'
 
 try:
     isinstance("", basestring)
@@ -518,7 +518,9 @@ class DebugConsumer(object):
         :param request_timeout:请求的超时时间,单位毫秒
         :return:
         """
-        if not debug_url_prefix.endswith('debug'):
+        import urlparse
+        debug_url_path = urlparse.urlparse(debug_url_prefix).path
+        if not debug_url_path.endswith('debug'):
             print('please init with debug API url.')
             raise SensorsAnalyticsDebugException()
         self._debug_url_prefix = debug_url_prefix
