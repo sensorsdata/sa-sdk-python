@@ -18,7 +18,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.3.1'
+SDK_VERSION = '1.3.2'
 
 try:
     isinstance("", basestring)
@@ -510,22 +510,22 @@ class DebugConsumer(object):
     具体的说明在http://www.sensorsdata.cn/manual/
     """
 
-    def __init__(self, debug_url_prefix, debug_write_data=True, request_timeout=None):
+    def __init__(self, url_prefix, write_data=True, request_timeout=None):
         """
         初始化Consumer
-        :param debug_url_prefix: 服务器提供的用于Debug的API的URL地址,特别注意,它与导入数据的API并不是同一个
-        :param debug_write_data: 发送过去的数据,是真正写入,还是仅仅进行检查
+        :param url_prefix: 服务器提供的用于Debug的API的URL地址,特别注意,它与导入数据的API并不是同一个
+        :param write_data: 发送过去的数据,是真正写入,还是仅仅进行检查
         :param request_timeout:请求的超时时间,单位毫秒
         :return:
         """
         import urlparse
-        debug_url_path = urlparse.urlparse(debug_url_prefix).path
-        if not debug_url_path.endswith('debug'):
-            print('please init with debug API url.')
-            raise SensorsAnalyticsDebugException()
-        self._debug_url_prefix = debug_url_prefix
+        debug_url = urlparse.urlparse(url_prefix)
+        ## 将 URI Path 替换成 Debug 模式的 '/debug'
+        debug_url = debug_url._replace(path = '/debug')
+        
+        self._debug_url_prefix = debug_url.geturl()
         self._request_timeout = request_timeout
-        self._debug_write_data = debug_write_data
+        self._debug_write_data = write_data
 
     @staticmethod
     def _gzip_string(data):
