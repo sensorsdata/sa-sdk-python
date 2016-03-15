@@ -20,7 +20,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.3.2'
+SDK_VERSION = '1.3.6'
 
 try:
     isinstance("", basestring)
@@ -128,14 +128,13 @@ class SensorsAnalytics(object):
         data = self._normalize_data(data)
         self._consumer.send(self._json_dumps(data))
 
-    def track_signup(self, distinct_id, original_id, event_name, properties=None):
+    def track_signup(self, distinct_id, original_id, properties=None):
         """
         这个接口是一个较为复杂的功能，请在使用前先阅读相关说明:http://www.sensorsdata.cn/manual/track_signup.html，
         并在必要时联系我们的技术支持人员。
 
         :param distinct_id: 用户注册之后的唯一标识。
         :param original_id: 用户注册前的唯一标识。
-        :param event_name: 事件名称。
         :param properties: 事件的属性。
         """
         event_time = self._extract_user_time(properties) or self._now()
@@ -144,7 +143,7 @@ class SensorsAnalytics(object):
             all_properties.update(properties)
         data = {
             'type': 'track_signup',
-            'event': event_name,
+            'event': '$SignUp',
             'time': event_time,
             'distinct_id': distinct_id,
             'original_id': original_id,
@@ -289,7 +288,6 @@ class SensorsAnalytics(object):
         """
         self._consumer.close()
 
-
 class DefaultConsumer(object):
     """
     默认的 Consumer实现，逐条、同步的发送数据给接收服务器。
@@ -412,12 +410,14 @@ class AsyncBatchConsumer(DefaultConsumer):
             self._consumer = consumer
             # 用于实现安全退出
             self._stop_event = threading.Event()
+            self._finished_event = threading.Event()
 
         def stop(self):
             """
             需要退出时调用此方法，以保证线程安全结束。
             """
             self._stop_event.set()
+            self._finished_event.wait()
 
         def run(self):
             while True:
@@ -429,6 +429,7 @@ class AsyncBatchConsumer(DefaultConsumer):
                 # 发现 stop 标志位时安全退出
                 if self._stop_event.isSet():
                     break
+            self._finished_event.set()
 
     def __init__(self, url_prefix, flush_max_time=3, flush_size=20,
                  max_batch_size=100, max_size=1000, request_timeout=None):
@@ -472,9 +473,9 @@ class AsyncBatchConsumer(DefaultConsumer):
     def flush(self):
         self.need_flush.set()
 
-    def sync_flush(self, throw_exception=False):
+    def sync_flush(self, throw_exception=True):
         """
-        执行一次异步发送。 throw_exception 表示在发送失败时是否向外抛出异常。
+        执行一次同步发送。 throw_exception 表示在发送失败时是否向外抛出异常。
         """
         flush_success = False
 
@@ -556,7 +557,7 @@ class DebugConsumer(object):
             else:
                 response = urllib2.urlopen(request)
         except urllib2.HTTPError as e:
-            return e
+            raise SensorsAnalyticsDebugException()
         return response
 
     def send(self, msg):

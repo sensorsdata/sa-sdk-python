@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='SensorsAnalyticsSDK',
-    version='1.3.5',
+    version='1.3.6',
     author='Yuhan ZOU',
     author_email='zouyuhan@sensorsdata.cn',
     url='http://www.sensorsdata.cn',
