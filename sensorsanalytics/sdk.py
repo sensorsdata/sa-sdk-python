@@ -10,10 +10,12 @@ import re
 import threading
 
 try:
+    from urllib.parse import urlparse
     import queue
     import urllib.parse as urllib
     import urllib.request as urllib2
 except ImportError:
+    from urlparse import urlparse
     import Queue as queue
     import urllib2
     import urllib
@@ -518,8 +520,7 @@ class DebugConsumer(object):
         :param request_timeout:请求的超时时间,单位毫秒
         :return:
         """
-        import urlparse
-        debug_url = urlparse.urlparse(url_prefix)
+        debug_url = urlparse(url_prefix)
         ## 将 URI Path 替换成 Debug 模式的 '/debug'
         debug_url = debug_url._replace(path = '/debug')
         
