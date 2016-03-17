@@ -20,7 +20,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.3.6'
+SDK_VERSION = '1.3.7'
 
 try:
     isinstance("", basestring)
@@ -583,3 +583,23 @@ class DebugConsumer(object):
 
     def close(self):
         pass
+
+
+class ConsoleConsumer(object):
+    """
+    将数据直接输出到标准输出
+    """
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def send(msg):
+        print(msg)
+
+    def flush(self):
+        pass
+
+    def close(self):
+        pass
+
