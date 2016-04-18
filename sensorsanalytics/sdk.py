@@ -300,7 +300,7 @@ class DefaultConsumer(object):
         :param url_prefix: 服务器的 URL 地址。
         :param request_timeout: 请求的超时时间，单位毫秒。
         """
-        self._url_prefix = url_prefix
+        self._url_prefix = url_prefix.encode('utf8')
         self._request_timeout = request_timeout
 
     @staticmethod
@@ -521,7 +521,7 @@ class DebugConsumer(object):
         :param request_timeout:请求的超时时间,单位毫秒
         :return:
         """
-        debug_url = urlparse(url_prefix)
+        debug_url = urlparse(url_prefix.encode('utf8'))
         ## 将 URI Path 替换成 Debug 模式的 '/debug'
         debug_url = debug_url._replace(path = '/debug')
         
