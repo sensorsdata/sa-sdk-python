@@ -7,7 +7,9 @@ import time
 import json
 import gzip
 import re
+import sys
 import threading
+import traceback
 
 try:
     from urllib.parse import urlparse
@@ -20,7 +22,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.3.7'
+SDK_VERSION = '1.4.0'
 
 try:
     isinstance("", basestring)
@@ -86,7 +88,7 @@ class SensorsAnalytics(object):
                 return obj.strftime(fmt)
             return json.JSONEncoder.default(self, obj)
 
-    def __init__(self, consumer=None):
+    def __init__(self, consumer=None, default_project_name='default'):
         """
         初始化一个 SensorsAnalytics 的实例。可以选择使用默认的 DefaultConsumer，也可以选择其它的 Consumer 实现。
 
@@ -97,6 +99,9 @@ class SensorsAnalytics(object):
         DebugConsumer:专门用于调试，逐条、同步地发送数据到专用的Debug接口，并且如果数据有异常会退出并打印异常原因
         """
         self._consumer = consumer
+        self._default_project_name = default_project_name
+        self._super_properties = {}
+        self.clear_super_properties();
 
     @staticmethod
     def _now():
@@ -106,56 +111,56 @@ class SensorsAnalytics(object):
     def _json_dumps(data):
         return json.dumps(data, separators=(',', ':'), cls=SensorsAnalytics.DatetimeSerializer)
 
+    def register_super_properties(self, super_properties): 
+        """
+        设置每个事件都带有的一些公共属性，当 track 的 properties 和 super properties 有相同的 key 时，将采用 track 的
+
+        :param super_properties 公共属性
+        """
+        self._super_properties.update(super_properties)
+
+    def clear_super_properties(self):
+        """
+        删除所有已设置的事件公共属性
+        """
+        self._super_properties = {
+            '$lib': 'python',
+            '$lib_version': SDK_VERSION,
+        }
+
     def track(self, distinct_id, event_name, properties=None):
         """
         跟踪一个用户的行为。
 
-        :param distinct_id: 用户的唯一标识。
-        :param event_name: 事件名称。
-        :param properties: 事件的属性。
+        :param distinct_id: 用户的唯一标识
+        :param event_name: 事件名称
+        :param properties: 事件的属性
         """
-        event_time = self._extract_user_time(properties) or self._now()
-        all_properties = self._get_common_properties()
+        all_properties = self._super_properties.copy() 
         if properties:
             all_properties.update(properties)
-        data = {
-            'type': 'track',
-            'event': event_name,
-            'time': event_time,
-            'distinct_id': distinct_id,
-            'properties': all_properties,
-        }
-        data = self._normalize_data(data)
-        self._consumer.send(self._json_dumps(data))
-
+        self._track_event('track', event_name, distinct_id, None, all_properties)
+ 
     def track_signup(self, distinct_id, original_id, properties=None):
         """
         这个接口是一个较为复杂的功能，请在使用前先阅读相关说明:http://www.sensorsdata.cn/manual/track_signup.html，
         并在必要时联系我们的技术支持人员。
 
-        :param distinct_id: 用户注册之后的唯一标识。
-        :param original_id: 用户注册前的唯一标识。
-        :param properties: 事件的属性。
+        :param distinct_id: 用户注册之后的唯一标识
+        :param original_id: 用户注册前的唯一标识
+        :param properties: 事件的属性
         """
-        event_time = self._extract_user_time(properties) or self._now()
-        all_properties = self._get_common_properties()
+        # 检查 original_id
+        if original_id is None or len(str(original_id)) == 0:
+            raise SensorsAnalyticsIllegalDataException("property [original_id] must not be empty")
+        if len(str(original_id)) > 255:
+            raise SensorsAnalyticsIllegalDataException("the max length of property [original_id] is 255")
+       
+        all_properties = self._super_properties.copy() 
         if properties:
             all_properties.update(properties)
-        data = {
-            'type': 'track_signup',
-            'event': '$SignUp',
-            'time': event_time,
-            'distinct_id': distinct_id,
-            'original_id': original_id,
-            'properties': all_properties,
-        }
-        # 检查 original_id
-        if data["original_id"] is None or len(str(data['original_id'])) == 0:
-            raise SensorsAnalyticsIllegalDataException("property [original_id] must not be empty")
-        if len(str(data['original_id'])) > 255:
-            raise SensorsAnalyticsIllegalDataException("the max length of property [original_id] is 255")
-        data = self._normalize_data(data)
-        self._consumer.send(self._json_dumps(data))
+        
+        self._track_event('track_signup', '$SignUp', distinct_id, original_id, all_properties)
 
     @staticmethod
     def _normalize_data(data):
@@ -183,6 +188,10 @@ class SensorsAnalytics(object):
         if 'event' in data and not SensorsAnalytics.NAME_PATTERN.match(data['event']):
             raise SensorsAnalyticsIllegalDataException("event name must be a valid variable name. [name=%s]" % data['event'])
 
+        # 检查 Event Name
+        if 'project' in data and not SensorsAnalytics.NAME_PATTERN.match(data['project']):
+            raise SensorsAnalyticsIllegalDataException("project name must be a valid variable name. [project=%s]" % data['project'])
+
         # 检查 properties
         if "properties" in data and data["properties"] is not None:
             for key, value in data["properties"].items():
@@ -205,15 +214,52 @@ class SensorsAnalytics(object):
 
         return data
 
-    @staticmethod
-    def _get_common_properties():
+    def _get_lib_properties(self):
+        lib_properties = {
+            '$lib' : 'python',
+            '$lib_version' : SDK_VERSION,
+            '$lib_method' : 'code',
+        }
+
+        if '$app_version' in self._super_properties: 
+            lib_properties['$app_version'] = self._super_properties['$app_version']
+
+        try:
+            raise Exception
+        except:
+            trace = traceback.extract_stack()
+            if len(trace) > 3:
+                file_name = trace[-4][0]
+                line_number = trace[-4][1]
+                
+                if trace[-4][2].startswith('<'):
+                    function_name = ''
+                else:
+                    function_name = trace[-4][2]
+                
+                if len(trace) > 4:
+                    class_name = trace[-5][3].split('(')[0] 
+                else:
+                    class_name = ''
+
+                lib_properties['$lib_detail'] = '%s##%s##%s##%s' % (class_name, function_name, file_name, line_number) 
+
+        return lib_properties
+
+    def _get_common_properties(self):
         """
         构造所有 Event 通用的属性:
         """
-        return {
+        common_properties = {
             '$lib': 'python',
             '$lib_version': SDK_VERSION,
         }
+
+        if self._app_version:
+            common_properties['$app_version'] = self._app_version
+
+        return common_properties
+
 
     @staticmethod
     def _extract_user_time(properties):
@@ -228,50 +274,77 @@ class SensorsAnalytics(object):
 
     def profile_set(self, distinct_id, profiles):
         """
-        直接设置一个用户的 Profile，如果已存在则覆盖。
+        直接设置一个用户的 Profile，如果已存在则覆盖
+
+        :param distinct_id: 用户的唯一标识
+        :param profiles: 用户属性
         """
-        return self._profile_update('profile_set', distinct_id, profiles)
+        return self._track_event('profile_set', None, distinct_id, None, profiles)
 
     def profile_set_once(self, distinct_id, profiles):
         """
         直接设置一个用户的 Profile，如果某个 Profile 已存在则不设置。
+
+        :param distinct_id: 用户的唯一标识
+        :param profiles: 用户属性
         """
-        return self._profile_update('profile_set_once', distinct_id, profiles)
+        return self._track_event('profile_set_once', None, distinct_id,  None, profiles)
 
     def profile_increment(self, distinct_id, profiles):
         """
         增减/减少一个用户的某一个或者多个数值类型的 Profile。
+
+        :param distinct_id: 用户的唯一标识
+        :param profiles: 用户属性
         """
-        return self._profile_update('profile_increment', distinct_id, profiles)
+        return self._track_event('profile_increment', None, distinct_id,  None, profiles)
 
     def profile_append(self, distinct_id, profiles):
         """
         追加一个用户的某一个或者多个集合类型的 Profile。
+
+        :param distinct_id: 用户的唯一标识
+        :param profiles: 用户属性
         """
-        return self._profile_update('profile_append', distinct_id, profiles)
+        return self._track_event('profile_append', None, distinct_id, None, profiles)
 
     def profile_unset(self, distinct_id, profile_keys):
         """
         删除一个用户的一个或者多个 Profile。
+
+        :param distinct_id: 用户的唯一标识
+        :param profile_keys: 用户属性键值列表
         """
         if isinstance(profile_keys, list):
             profile_keys = dict((key, True) for key in profile_keys)
-        return self._profile_update('profile_unset', distinct_id, profile_keys)
+        return self._track_event('profile_unset', None, distinct_id, None, profile_keys)
 
     def profile_delete(self, distinct_id):
         """
         删除整个用户的信息。
-        """
-        return self._profile_update('profile_delete', distinct_id, {})
 
-    def _profile_update(self, update_type, distinct_id, profiles):
-        event_time = self._extract_user_time(profiles) or self._now()
+        :param distinct_id: 用户的唯一标识
+        """
+        return self._track_event('profile_delete', None, distinct_id, None, {})
+
+    def _track_event(self, event_type, event_name, distinct_id, original_id, properties):
+        event_time = self._extract_user_time(properties) or self._now()
+
         data = {
-            'type': update_type,
-            'properties': profiles,
+            'type': event_type,
             'time': event_time,
-            'distinct_id': distinct_id
+            'distinct_id': distinct_id,
+            'project': self._default_project_name,
+            'properties': properties,
+            'lib': self._get_lib_properties(),
         }
+        
+        if event_type == "track" or event_type == "track_signup":
+            data["event"] = event_name
+
+        if event_type == "track_signup":
+            data["original_id"] = original_id
+
         data = self._normalize_data(data)
         self._consumer.send(self._json_dumps(data))
 
@@ -557,7 +630,7 @@ class DebugConsumer(object):
             else:
                 response = urllib2.urlopen(request)
         except urllib2.HTTPError as e:
-            raise SensorsAnalyticsDebugException()
+            raise SensorsAnalyticsDebugException(e)
         return response
 
     def send(self, msg):
