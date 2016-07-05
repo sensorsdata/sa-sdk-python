@@ -22,7 +22,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.4.0'
+SDK_VERSION = '1.5.0'
 
 try:
     isinstance("", basestring)
@@ -88,7 +88,7 @@ class SensorsAnalytics(object):
                 return obj.strftime(fmt)
             return json.JSONEncoder.default(self, obj)
 
-    def __init__(self, consumer=None, default_project_name='default'):
+    def __init__(self, consumer=None, project_name=None, enable_time_free = False):
         """
         初始化一个 SensorsAnalytics 的实例。可以选择使用默认的 DefaultConsumer，也可以选择其它的 Consumer 实现。
 
@@ -97,9 +97,14 @@ class SensorsAnalytics(object):
         BatchConsumer: 批量、同步的发送数据;
         AsyncBatchConsumer: 批量、异步的发送数据;
         DebugConsumer:专门用于调试，逐条、同步地发送数据到专用的Debug接口，并且如果数据有异常会退出并打印异常原因
+
+        @param consumer SDK实例使用的Consumer
+        @param project_name Project名称
+        @param enable_time_free 打开 time-free 特性
         """
         self._consumer = consumer
-        self._default_project_name = default_project_name
+        self._default_project_name = project_name
+        self._enable_time_free = enable_time_free
         self._super_properties = {}
         self.clear_super_properties();
 
@@ -197,9 +202,14 @@ class SensorsAnalytics(object):
             for key, value in data["properties"].items():
                 if not is_str(key):
                     raise SensorsAnalyticsIllegalDataException("property key must be a str. [key=%s]" % str(key))
+                if len(key) > 255:
+                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 256. [key=%s]" % str(key))
                 if not SensorsAnalytics.NAME_PATTERN.match(key):
                     raise SensorsAnalyticsIllegalDataException(
                         "property key must be a valid variable name. [key=%s]" % str(key))
+
+                if is_str(value) and len(value) > 8191:
+                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 8192. [key=%s]" % str(key))
 
                 if not is_str(value) and not is_int(value) and not isinstance(value, float)\
                         and not isinstance(value, datetime.datetime) and not isinstance(value, datetime.date)\
@@ -334,16 +344,20 @@ class SensorsAnalytics(object):
             'type': event_type,
             'time': event_time,
             'distinct_id': distinct_id,
-            'project': self._default_project_name,
             'properties': properties,
             'lib': self._get_lib_properties(),
         }
-        
+        if self._default_project_name is not None:
+            data['project'] = self._default_project_name
+
         if event_type == "track" or event_type == "track_signup":
             data["event"] = event_name
 
         if event_type == "track_signup":
             data["original_id"] = original_id
+
+        if self._enable_time_free:
+            data["time_free"] = True
 
         data = self._normalize_data(data)
         self._consumer.send(self._json_dumps(data))
@@ -630,7 +644,7 @@ class DebugConsumer(object):
             else:
                 response = urllib2.urlopen(request)
         except urllib2.HTTPError as e:
-            raise SensorsAnalyticsDebugException(e)
+            return e
         return response
 
     def send(self, msg):
@@ -646,6 +660,7 @@ class DebugConsumer(object):
             print('invalid message: %s' % msg)
             print('ret_code: %s' % ret_code)
             print('ret_content: %s' % response.read().decode('utf8'))
+        if ret_code >= 300:
             raise SensorsAnalyticsDebugException()
 
     def _encode_msg(self, msg):
