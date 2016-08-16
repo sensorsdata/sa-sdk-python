@@ -10,6 +10,8 @@ import re
 import sys
 import threading
 import traceback
+import logging
+import logging.handlers
 
 try:
     from urllib.parse import urlparse
@@ -691,3 +693,25 @@ class ConsoleConsumer(object):
     def close(self):
         pass
 
+
+class LoggingConsumer(object):
+    """
+    将数据使用 logging 库输出到指定路径，并默认按天切割
+    """
+
+    def __init__(self, prefix, backupCount=0, when='midnight'):
+        log_handler = logging.handlers.TimedRotatingFileHandler(prefix, when=when, backupCount=backupCount)
+        log_handler.setFormatter(logging.Formatter('%(message)s'))
+        self.logger = logging.getLogger('SensorsAnalyticsLogger')
+        self.logger.propagate = False
+        self.logger.setLevel(logging.INFO)
+        self.logger.addHandler(log_handler)
+
+    def send(self, msg):
+        self.logger.info(msg)
+
+    def flush(self):
+        self.logger.handlers[0].flush()
+
+    def close(self):
+        self.logger.handlers[0].close()
