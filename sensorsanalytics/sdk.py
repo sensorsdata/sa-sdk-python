@@ -24,7 +24,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.5.0'
+SDK_VERSION = '1.5.1'
 
 try:
     isinstance("", basestring)
