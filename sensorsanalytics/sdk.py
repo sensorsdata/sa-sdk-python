@@ -24,7 +24,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.5.1'
+SDK_VERSION = '1.5.2'
 
 try:
     isinstance("", basestring)
@@ -249,7 +249,7 @@ class SensorsAnalytics(object):
                 else:
                     function_name = trace[-4][2]
                 
-                if len(trace) > 4:
+                if len(trace) > 4 and len(trace[-5]) > 3 and trace[-5][3]:
                     class_name = trace[-5][3].split('(')[0] 
                 else:
                     class_name = ''
