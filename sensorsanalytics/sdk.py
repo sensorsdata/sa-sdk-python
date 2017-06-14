@@ -24,7 +24,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.5.3'
+SDK_VERSION = '1.7.0'
 
 try:
     isinstance("", basestring)
@@ -90,7 +90,7 @@ class SensorsAnalytics(object):
                 return obj.strftime(fmt)
             return json.JSONEncoder.default(self, obj)
 
-    def __init__(self, consumer=None, project_name=None, enable_time_free = False):
+    def __init__(self, consumer=None, project_name=None, enable_time_free=False):
         """
         初始化一个 SensorsAnalytics 的实例。可以选择使用默认的 DefaultConsumer，也可以选择其它的 Consumer 实现。
 
@@ -135,7 +135,7 @@ class SensorsAnalytics(object):
             '$lib_version': SDK_VERSION,
         }
 
-    def track(self, distinct_id, event_name, properties=None):
+    def track(self, distinct_id, event_name, properties=None, is_login_id=False):
         """
         跟踪一个用户的行为。
 
@@ -146,7 +146,7 @@ class SensorsAnalytics(object):
         all_properties = self._super_properties.copy() 
         if properties:
             all_properties.update(properties)
-        self._track_event('track', event_name, distinct_id, None, all_properties)
+        self._track_event('track', event_name, distinct_id, None, all_properties, is_login_id)
  
     def track_signup(self, distinct_id, original_id, properties=None):
         """
@@ -167,7 +167,7 @@ class SensorsAnalytics(object):
         if properties:
             all_properties.update(properties)
         
-        self._track_event('track_signup', '$SignUp', distinct_id, original_id, all_properties)
+        self._track_event('track_signup', '$SignUp', distinct_id, original_id, all_properties, False)
 
     @staticmethod
     def _normalize_data(data):
@@ -284,43 +284,43 @@ class SensorsAnalytics(object):
             return t
         return None
 
-    def profile_set(self, distinct_id, profiles):
+    def profile_set(self, distinct_id, profiles, is_login_id=False):
         """
         直接设置一个用户的 Profile，如果已存在则覆盖
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
         """
-        return self._track_event('profile_set', None, distinct_id, None, profiles)
+        return self._track_event('profile_set', None, distinct_id, None, profiles, is_login_id)
 
-    def profile_set_once(self, distinct_id, profiles):
+    def profile_set_once(self, distinct_id, profiles, is_login_id=False):
         """
         直接设置一个用户的 Profile，如果某个 Profile 已存在则不设置。
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
         """
-        return self._track_event('profile_set_once', None, distinct_id,  None, profiles)
+        return self._track_event('profile_set_once', None, distinct_id,  None, profiles, is_login_id)
 
-    def profile_increment(self, distinct_id, profiles):
+    def profile_increment(self, distinct_id, profiles, is_login_id=False):
         """
         增减/减少一个用户的某一个或者多个数值类型的 Profile。
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
         """
-        return self._track_event('profile_increment', None, distinct_id,  None, profiles)
+        return self._track_event('profile_increment', None, distinct_id,  None, profiles, is_login_id)
 
-    def profile_append(self, distinct_id, profiles):
+    def profile_append(self, distinct_id, profiles, is_login_id=False):
         """
         追加一个用户的某一个或者多个集合类型的 Profile。
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
         """
-        return self._track_event('profile_append', None, distinct_id, None, profiles)
+        return self._track_event('profile_append', None, distinct_id, None, profiles, is_login_id)
 
-    def profile_unset(self, distinct_id, profile_keys):
+    def profile_unset(self, distinct_id, profile_keys, is_login_id=False):
         """
         删除一个用户的一个或者多个 Profile。
 
@@ -329,17 +329,17 @@ class SensorsAnalytics(object):
         """
         if isinstance(profile_keys, list):
             profile_keys = dict((key, True) for key in profile_keys)
-        return self._track_event('profile_unset', None, distinct_id, None, profile_keys)
+        return self._track_event('profile_unset', None, distinct_id, None, profile_keys, is_login_id)
 
-    def profile_delete(self, distinct_id):
+    def profile_delete(self, distinct_id, is_login_id=False):
         """
         删除整个用户的信息。
 
         :param distinct_id: 用户的唯一标识
         """
-        return self._track_event('profile_delete', None, distinct_id, None, {})
+        return self._track_event('profile_delete', None, distinct_id, None, {}, is_login_id)
 
-    def _track_event(self, event_type, event_name, distinct_id, original_id, properties):
+    def _track_event(self, event_type, event_name, distinct_id, original_id, properties, is_login_id):
         event_time = self._extract_user_time(properties) or self._now()
 
         data = {
@@ -360,6 +360,9 @@ class SensorsAnalytics(object):
 
         if self._enable_time_free:
             data["time_free"] = True
+
+        if is_login_id:
+            properties["$is_login_id"] = True
 
         data = self._normalize_data(data)
         self._consumer.send(self._json_dumps(data))
