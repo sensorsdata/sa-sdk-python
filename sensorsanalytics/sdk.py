@@ -24,7 +24,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.7.0'
+SDK_VERSION = '1.7.1'
 
 try:
     isinstance("", basestring)
@@ -239,22 +239,28 @@ class SensorsAnalytics(object):
         try:
             raise Exception
         except:
-            trace = traceback.extract_stack()
+            trace = traceback.extract_stack(limit=5)
             if len(trace) > 3:
-                file_name = trace[-4][0]
-                line_number = trace[-4][1]
-                
-                if trace[-4][2].startswith('<'):
-                    function_name = ''
-                else:
-                    function_name = trace[-4][2]
-                
-                if len(trace) > 4 and trace[-5][3]:
-                    class_name = trace[-5][3].split('(')[0] 
-                else:
-                    class_name = ''
+                try:
+                    file_name = trace[-4][0]
+                    line_number = trace[-4][1]
+                    
+                    if trace[-4][2].startswith('<'):
+                        function_name = ''
+                    else:
+                        function_name = trace[-4][2]
+                   
+                    try:
+                        if len(trace) > 4 and trace[-5][3]:
+                            class_name = trace[-5][3].split('(')[0] 
+                        else:
+                            class_name = ''
+                    except:
+                        print(trace.format()) 
 
-                lib_properties['$lib_detail'] = '%s##%s##%s##%s' % (class_name, function_name, file_name, line_number) 
+                    lib_properties['$lib_detail'] = '%s##%s##%s##%s' % (class_name, function_name, file_name, line_number) 
+                except:
+                    pass
 
         return lib_properties
 
