@@ -3,15 +3,16 @@
 from __future__ import unicode_literals
 import base64
 import datetime
-import time
-import json
+import fcntl
 import gzip
+import json
+import logging
+import logging.handlers
 import re
 import sys
 import threading
+import time
 import traceback
-import logging
-import logging.handlers
 
 try:
     from urllib.parse import urlparse
@@ -24,7 +25,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.7.1'
+SDK_VERSION = '1.7.2'
 
 try:
     isinstance("", basestring)
@@ -724,3 +725,94 @@ class LoggingConsumer(object):
 
     def close(self):
         self.logger.handlers[0].close()
+
+class ConcurrentLoggingConsumer(object):
+    """
+    将数据输出到指定路径，并按天切割，支持多进程并行输出到同一个文件名
+    """
+
+    class ConcurrentFileWriter(object):
+
+        def __init__(self, filename):
+            self._filename = filename
+            self._file = open(filename, 'a')
+
+        def close(self):
+            self._file.close()
+
+        def isValid(self, filename):
+            return self._filename == filename 
+
+        def write(self, messages):
+            try:
+                fcntl.flock(self._file, fcntl.LOCK_EX)
+
+                self._file.write('\n'.join(messages))
+                self._file.write('\n')
+                
+                fcntl.flock(self._file, fcntl.LOCK_UN)
+            except IOError:
+                print("can't lock the file")
+
+
+    @classmethod
+    def construct_filename(cls, prefix):
+        return prefix + '.' + datetime.datetime.now().strftime('%Y-%m-%d') 
+
+    def __init__(self, prefix, bufferSize=8192):
+        self._prefix = prefix
+
+        self._buffer = []
+        self._bufferSize = bufferSize
+
+        self._mutex = queue.Queue()
+        self._mutex.put(1)
+
+        filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)
+        self._writer = ConcurrentLoggingConsumer.ConcurrentFileWriter(filename)
+
+    def send(self, msg):
+        messages = None
+
+        self._mutex.get(block=True, timeout=None)
+
+        self._buffer.append(msg)
+
+        if len(self._buffer) > self._bufferSize:
+            messages = self._buffer
+
+            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)    
+            if not self._writer.isValid(filename):
+                self._writer.close()
+                self._writer = ConcurrentLoggingConsumer.ConcurrentFileWriter(filename)
+
+            self._buffer = []
+
+        self._mutex.put(1)
+   
+        if messages:
+            self._writer.write(messages)
+
+    def flush(self):
+        messages = None
+
+        self._mutex.get(block=True, timeout=None)
+
+        if len(self._buffer) > 0:
+            messages = self._buffer
+
+            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)    
+            if not self._writer.isValid(filename):
+                self._writer.close()
+                self._writer = ConcurrentLoggingConsumer.ConcurrentFileWriter(filename)
+
+            self._buffer = []
+
+        self._mutex.put(1)
+   
+        if messages:
+            self._writer.write(messages)
+
+    def close(self):
+        self.flush()
+        self._writer.close()
