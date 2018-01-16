@@ -25,7 +25,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.7.2'
+SDK_VERSION = '1.7.3'
 
 try:
     isinstance("", basestring)
@@ -747,8 +747,10 @@ class ConcurrentLoggingConsumer(object):
             try:
                 fcntl.flock(self._file, fcntl.LOCK_EX)
 
-                self._file.write('\n'.join(messages))
-                self._file.write('\n')
+                for message in messages:
+                    self._file.write(message)
+                    self._file.write('\n')
+                self._file.flush()
                 
                 fcntl.flock(self._file, fcntl.LOCK_UN)
             except IOError:
