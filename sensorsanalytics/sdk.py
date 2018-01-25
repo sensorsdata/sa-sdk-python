@@ -8,6 +8,7 @@ import gzip
 import json
 import logging
 import logging.handlers
+import os
 import re
 import sys
 import threading
@@ -25,7 +26,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.7.3'
+SDK_VERSION = '1.7.4'
 
 try:
     isinstance("", basestring)
@@ -61,11 +62,98 @@ class SensorsAnalyticsNetworkException(SensorsAnalyticsException):
     pass
 
 
+class SensorsAnalyticsFileLockException(SensorsAnalyticsException):
+    """
+    当 ConcurrentLoggingConsumer 文件锁异常时，SDK 会抛出此异常，用户应当捕获并记录错误日志。
+    """
+    pass
+
+
 class SensorsAnalyticsDebugException(Exception):
     """
     Debug模式专用的异常
     """
     pass
+
+
+if os.name == 'nt':  # pragma: no cover
+    import msvcrt
+
+    LOCK_EX = 0x1
+    LOCK_SH = 0x2
+    LOCK_NB = 0x4
+    LOCK_UN = msvcrt.LK_UNLCK
+
+    def lock(file_, flags):
+        if flags & LOCK_SH:
+            if flags & LOCK_NB:
+                mode = msvcrt.LK_NBRLCK
+            else:
+                if hasattr(msvcrt, 'LK.RLOCK'):
+                    mode = msvcrt.LK_RLOCK
+                else:
+                    mode = msvcrt.LK_RLCK
+        else:
+            if flags & LOCK_NB:
+                mode = msvcrt.LK_NBLCK
+            else:
+                mode = msvcrt.LK_LOCK
+
+        try:
+            savepos = file_.tell()
+            
+            file_.seek(0, os.SEEK_END)
+            tellpos = file_.tell()
+
+            file_.seek(0)
+            try:
+                msvcrt.locking(file_.fileno(), mode, tellpos)
+            except IOError as e:
+                raise SensorsAnalyticsFileLockException(e) 
+            finally:
+                if savepos:
+                    file_.seek(savepos)
+        except IOError as e:
+            raise SensorsAnalyticsFileLockException(e) 
+
+    def unlock(file_):
+        try:
+            savepos = file_.tell()
+
+            file_.seek(0, os.SEEK_END)
+            tellpos = file_.tell()
+
+            file_.seek(0)
+            
+            try:
+                msvcrt.locking(file_.fileno(), LOCK_UN, tellpos)
+            except IOError as e:
+                raise SensorsAnalyticsFileLockException(e) 
+            finally:
+                if savepos:
+                    file_.seek(savepos)
+        except IOError as e:
+            raise SensorsAnalyticsFileLockException(e) 
+
+elif os.name == 'posix':  # pragma: no cover
+    import fcntl
+
+    LOCK_EX = fcntl.LOCK_EX
+    LOCK_SH = fcntl.LOCK_SH
+    LOCK_NB = fcntl.LOCK_NB
+    LOCK_UN = fcntl.LOCK_UN
+
+    def lock(file_, flags):
+        try:
+            fcntl.flock(file_.fileno(), flags)
+        except IOError as e:
+            raise SensorsAnalyticsFileLockException(e) 
+
+    def unlock(file_):
+        fcntl.flock(file_.fileno(), LOCK_UN)
+
+else:
+    raise SensorsAnalyticsFileLockException("SensorsAnalytics SDK is defined for NT and POSIX system.") 
 
 
 class SensorsAnalytics(object):
@@ -744,17 +832,14 @@ class ConcurrentLoggingConsumer(object):
             return self._filename == filename 
 
         def write(self, messages):
-            try:
-                fcntl.flock(self._file, fcntl.LOCK_EX)
+            lock(self._file, LOCK_EX)
 
-                for message in messages:
-                    self._file.write(message)
-                    self._file.write('\n')
-                self._file.flush()
-                
-                fcntl.flock(self._file, fcntl.LOCK_UN)
-            except IOError:
-                print("can't lock the file")
+            for message in messages:
+                self._file.write(message)
+                self._file.write('\n')
+            self._file.flush()
+            
+            unlock(self._file) 
 
 
     @classmethod
