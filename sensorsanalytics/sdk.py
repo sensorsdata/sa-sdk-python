@@ -3,7 +3,6 @@
 from __future__ import unicode_literals
 import base64
 import datetime
-import fcntl
 import gzip
 import json
 import logging
@@ -79,35 +78,14 @@ class SensorsAnalyticsDebugException(Exception):
 if os.name == 'nt':  # pragma: no cover
     import msvcrt
 
-    LOCK_EX = 0x1
-    LOCK_SH = 0x2
-    LOCK_NB = 0x4
-    LOCK_UN = msvcrt.LK_UNLCK
-
-    def lock(file_, flags):
-        if flags & LOCK_SH:
-            if flags & LOCK_NB:
-                mode = msvcrt.LK_NBRLCK
-            else:
-                if hasattr(msvcrt, 'LK.RLOCK'):
-                    mode = msvcrt.LK_RLOCK
-                else:
-                    mode = msvcrt.LK_RLCK
-        else:
-            if flags & LOCK_NB:
-                mode = msvcrt.LK_NBLCK
-            else:
-                mode = msvcrt.LK_LOCK
-
+    def lock(file_):
         try:
             savepos = file_.tell()
-            
-            file_.seek(0, os.SEEK_END)
-            tellpos = file_.tell()
-
+           
             file_.seek(0)
+
             try:
-                msvcrt.locking(file_.fileno(), mode, tellpos)
+                msvcrt.locking(file_.fileno(), msvcrt.LK_LOCK, 1)
             except IOError as e:
                 raise SensorsAnalyticsFileLockException(e) 
             finally:
@@ -119,14 +97,11 @@ if os.name == 'nt':  # pragma: no cover
     def unlock(file_):
         try:
             savepos = file_.tell()
-
-            file_.seek(0, os.SEEK_END)
-            tellpos = file_.tell()
-
-            file_.seek(0)
+            if savepos:
+                file_.seek(0)
             
             try:
-                msvcrt.locking(file_.fileno(), LOCK_UN, tellpos)
+                msvcrt.locking(file_.fileno(), msvcrt.LK_UNLCK, 1)
             except IOError as e:
                 raise SensorsAnalyticsFileLockException(e) 
             finally:
@@ -138,19 +113,14 @@ if os.name == 'nt':  # pragma: no cover
 elif os.name == 'posix':  # pragma: no cover
     import fcntl
 
-    LOCK_EX = fcntl.LOCK_EX
-    LOCK_SH = fcntl.LOCK_SH
-    LOCK_NB = fcntl.LOCK_NB
-    LOCK_UN = fcntl.LOCK_UN
-
-    def lock(file_, flags):
+    def lock(file_):
         try:
-            fcntl.flock(file_.fileno(), flags)
+            fcntl.flock(file_.fileno(), fcntl.LOCK_EX)
         except IOError as e:
             raise SensorsAnalyticsFileLockException(e) 
 
     def unlock(file_):
-        fcntl.flock(file_.fileno(), LOCK_UN)
+        fcntl.flock(file_.fileno(), fcntl.LOCK_UN)
 
 else:
     raise SensorsAnalyticsFileLockException("SensorsAnalytics SDK is defined for NT and POSIX system.") 
@@ -662,7 +632,7 @@ class AsyncBatchConsumer(DefaultConsumer):
 
     def sync_flush(self, throw_exception=True):
         """
-        执行一次同步发送。 throw_exception 表示在发送失败时是否向外抛出异常。
+        执行一次同步发送。 throw_exception 表示在发送失败时是否向外抛出异常
         """
         flush_success = False
 
@@ -832,7 +802,7 @@ class ConcurrentLoggingConsumer(object):
             return self._filename == filename 
 
         def write(self, messages):
-            lock(self._file, LOCK_EX)
+            lock(self._file)
 
             for message in messages:
                 self._file.write(message)
