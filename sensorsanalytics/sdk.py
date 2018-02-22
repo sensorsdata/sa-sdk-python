@@ -25,7 +25,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.7.4'
+SDK_VERSION = '1.7.5'
 
 try:
     isinstance("", basestring)
@@ -125,6 +125,18 @@ elif os.name == 'posix':  # pragma: no cover
 else:
     raise SensorsAnalyticsFileLockException("SensorsAnalytics SDK is defined for NT and POSIX system.") 
 
+
+class SAFileLock(object):
+    
+    def __init__(self, file_handler):
+        self._file_handler = file_handler
+
+    def __enter__(self):
+        lock(self._file_handler)
+        return self
+
+    def __exit__(self, t, v, tb):
+        unlock(self._file_handler)
 
 class SensorsAnalytics(object):
     """
@@ -802,15 +814,11 @@ class ConcurrentLoggingConsumer(object):
             return self._filename == filename 
 
         def write(self, messages):
-            lock(self._file)
-
-            for message in messages:
-                self._file.write(message)
-                self._file.write('\n')
-            self._file.flush()
-            
-            unlock(self._file) 
-
+            with SAFileLock(self._file):
+                for message in messages:
+                    self._file.write(message)
+                    self._file.write('\n')
+                self._file.flush()
 
     @classmethod
     def construct_filename(cls, prefix):
