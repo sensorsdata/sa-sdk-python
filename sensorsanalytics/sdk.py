@@ -241,6 +241,32 @@ class SensorsAnalytics(object):
         self._track_event('track_signup', '$SignUp', distinct_id, original_id, all_properties, False)
 
     @staticmethod
+    def _normalize_properties(data):
+        if "properties" in data and data["properties"] is not None:
+            for key, value in data["properties"].items():
+                if not is_str(key):
+                    raise SensorsAnalyticsIllegalDataException("property key must be a str. [key=%s]" % str(key))
+                if len(key) > 255:
+                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 256. [key=%s]" % str(key))
+                if not SensorsAnalytics.NAME_PATTERN.match(key):
+                    raise SensorsAnalyticsIllegalDataException(
+                        "property key must be a valid variable name. [key=%s]" % str(key))
+
+                if is_str(value) and len(value) > 8191:
+                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 8192. [key=%s]" % str(key))
+
+                if not is_str(value) and not is_int(value) and not isinstance(value, float)\
+                        and not isinstance(value, datetime.datetime) and not isinstance(value, datetime.date)\
+                        and not isinstance(value, list) and value is not None:
+                    raise SensorsAnalyticsIllegalDataException(
+                        "property value must be a str/int/float/datetime/date/list. [value=%s]" % type(value))
+                if isinstance(value, list):
+                    for lvalue in value:
+                        if not is_str(lvalue):
+                            raise SensorsAnalyticsIllegalDataException(
+                                "[list] property's value must be a str. [value=%s]" % type(lvalue))
+
+    @staticmethod
     def _normalize_data(data):
         # 检查 distinct_id
         if data["distinct_id"] is None or len(str(data['distinct_id'])) == 0:
@@ -271,30 +297,7 @@ class SensorsAnalytics(object):
             raise SensorsAnalyticsIllegalDataException("project name must be a valid variable name. [project=%s]" % data['project'])
 
         # 检查 properties
-        if "properties" in data and data["properties"] is not None:
-            for key, value in data["properties"].items():
-                if not is_str(key):
-                    raise SensorsAnalyticsIllegalDataException("property key must be a str. [key=%s]" % str(key))
-                if len(key) > 255:
-                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 256. [key=%s]" % str(key))
-                if not SensorsAnalytics.NAME_PATTERN.match(key):
-                    raise SensorsAnalyticsIllegalDataException(
-                        "property key must be a valid variable name. [key=%s]" % str(key))
-
-                if is_str(value) and len(value) > 8191:
-                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 8192. [key=%s]" % str(key))
-
-                if not is_str(value) and not is_int(value) and not isinstance(value, float)\
-                        and not isinstance(value, datetime.datetime) and not isinstance(value, datetime.date)\
-                        and not isinstance(value, list) and value is not None:
-                    raise SensorsAnalyticsIllegalDataException(
-                        "property value must be a str/int/float/datetime/date/list. [value=%s]" % type(value))
-                if isinstance(value, list):
-                    for lvalue in value:
-                        if not is_str(lvalue):
-                            raise SensorsAnalyticsIllegalDataException(
-                                "[list] property's value must be a str. [value=%s]" % type(lvalue))
-
+        SensorsAnalytics._normalize_properties(data)
         return data
 
     def _get_lib_properties(self):
@@ -415,6 +418,65 @@ class SensorsAnalytics(object):
         :param distinct_id: 用户的唯一标识
         """
         return self._track_event('profile_delete', None, distinct_id, None, {}, is_login_id)
+
+    def item_set(self, item_type, item_id, properties={}):
+        """
+        直接设置一个物品，如果已存在则覆盖。
+
+        :param item_type: 物品类型
+        :param item_id: 物品的唯一标识
+        :param profiles: 物品属性
+        """
+        return self._track_item('item_set', item_type, item_id, properties)
+
+    def item_delete(self, item_type, item_id, properties={}):
+        """
+        删除一个物品。
+
+        :param item_type: 物品类型
+        :param item_id: 物品的唯一标识
+        :param profiles: 物品属性
+        """
+        return self._track_item('item_delete', item_type, item_id, properties)
+
+    @staticmethod
+    def _normalize_item_data(data):
+        # 检查 item_type
+        if not SensorsAnalytics.NAME_PATTERN.match(data['item_type']):
+            raise SensorsAnalyticsIllegalDataException(
+                "item_type must be a valid variable name. [key=%s]" % str(data['item_type']))
+
+        # 检查 item_id
+        if data['item_id'] is None or len(str(data['item_id'])) == 0:
+            raise SensorsAnalyticsIllegalDataException("item_id must not be empty")
+        if len(str(data['item_id'])) > 255:
+            raise SensorsAnalyticsIllegalDataException("the max length of item_id is 255")
+        # 检查 properties
+        SensorsAnalytics._normalize_properties(data)
+        return data
+
+    def _track_item(self, event_type, item_type, item_id, properties):
+        data = {
+            'type': event_type,
+            'time': self._now(),
+            'lib': self._get_lib_properties(),
+            'item_type': item_type,
+            'item_id': item_id,
+        }
+
+        if self._default_project_name is not None:
+            data['project'] = self._default_project_name
+
+        if properties and '$project' in properties and len(str(properties['$project'])) != 0:
+            data['project'] = properties['$project']
+            properties.pop('$project')
+
+        data['properties'] = properties
+
+        data = self._normalize_item_data(data)
+        self._json_dumps(data)
+        self._consumer.send(self._json_dumps(data))
+
 
     def _track_event(self, event_type, event_name, distinct_id, original_id, properties, is_login_id):
         event_time = self._extract_user_time(properties) or self._now()
