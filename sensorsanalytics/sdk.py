@@ -419,7 +419,7 @@ class SensorsAnalytics(object):
         """
         return self._track_event('profile_delete', None, distinct_id, None, {}, is_login_id)
 
-    def item_set(self, item_type, item_id, properties={}):
+    def item_set(self, item_type, item_id, properties=None):
         """
         直接设置一个物品，如果已存在则覆盖。
 
@@ -429,7 +429,7 @@ class SensorsAnalytics(object):
         """
         return self._track_item('item_set', item_type, item_id, properties)
 
-    def item_delete(self, item_type, item_id, properties={}):
+    def item_delete(self, item_type, item_id, properties=None):
         """
         删除一个物品。
 
@@ -456,6 +456,8 @@ class SensorsAnalytics(object):
         return data
 
     def _track_item(self, event_type, item_type, item_id, properties):
+        if properties is None:
+            properties = {}
         data = {
             'type': event_type,
             'time': self._now(),
