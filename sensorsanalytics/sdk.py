@@ -25,7 +25,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.10.0'
+SDK_VERSION = '1.10.1'
 
 try:
     isinstance("", basestring)
@@ -364,6 +364,28 @@ class SensorsAnalytics(object):
             return t
         return None
 
+    @staticmethod
+    def _extract_token(properties):
+        """
+        如果用户传入了 $token 字段，则在 properties 外层加上token，并删除 $token 字段
+        """
+        if properties is not None and '$token' in properties:
+            t = properties['$token']
+            del (properties['$token'])
+            return t
+        return None
+
+    @staticmethod
+    def _extract_project(properties):
+        """
+        如果用户传入了 $project 字段，则在 properties 外层加上 project，并删除 $project 字段
+        """
+        if properties is not None and '$project' in properties:
+            t = properties['$project']
+            del (properties['$project'])
+            return t
+        return None
+
     def profile_set(self, distinct_id, profiles, is_login_id=False):
         """
         直接设置一个用户的 Profile，如果已存在则覆盖
@@ -482,6 +504,8 @@ class SensorsAnalytics(object):
 
     def _track_event(self, event_type, event_name, distinct_id, original_id, properties, is_login_id):
         event_time = self._extract_user_time(properties) or self._now()
+        event_token = self._extract_token(properties)
+        event_project = self._extract_project(properties)
 
         data = {
             'type': event_type,
@@ -504,6 +528,12 @@ class SensorsAnalytics(object):
 
         if is_login_id:
             properties["$is_login_id"] = True
+
+        if event_token is not None:
+            data["token"] = event_token
+
+        if event_project is not None:
+            data["project"] = event_project
 
         data = self._normalize_data(data)
         self._consumer.send(self._json_dumps(data))
