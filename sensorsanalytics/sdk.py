@@ -531,7 +531,7 @@ class DefaultConsumer(object):
         初始化 Consumer。
 
         :param url_prefix: 服务器的 URL 地址。
-        :param request_timeout: 请求的超时时间，单位毫秒。
+        :param request_timeout: 请求的超时时间，单位为秒。
         """
         self._url_prefix = url_prefix
         self._request_timeout = request_timeout
@@ -595,7 +595,7 @@ class BatchConsumer(DefaultConsumer):
 
         :param url_prefix: 服务器的 URL 地址。
         :param max_size: 批量发送的阈值。
-        :param request_timeout: 请求服务器的超时时间，单位毫秒。
+        :param request_timeout: 请求服务器的超时时间，单位为秒。
         :return:
         """
         super(BatchConsumer, self).__init__(url_prefix, request_timeout)
@@ -674,7 +674,7 @@ class AsyncBatchConsumer(DefaultConsumer):
         :param flush_size: 队列缓存的阈值，超过此值将立即进行发送。
         :param max_batch_size: 单个请求发送的最大大小。
         :param max_size: 整个缓存队列的最大大小。
-        :param request_timeout: 请求的超时时间，单位毫秒。
+        :param request_timeout: 请求的超时时间，单位为秒。
         """
         super(AsyncBatchConsumer, self).__init__(url_prefix, request_timeout)
 
@@ -751,7 +751,7 @@ class DebugConsumer(object):
         初始化Consumer
         :param url_prefix: 服务器提供的用于Debug的API的URL地址,特别注意,它与导入数据的API并不是同一个
         :param write_data: 发送过去的数据,是真正写入,还是仅仅进行检查
-        :param request_timeout:请求的超时时间,单位毫秒
+        :param request_timeout:请求的超时时间,单位为秒
         :return:
         """
         debug_url = urlparse(url_prefix)
