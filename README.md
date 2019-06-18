@@ -29,6 +29,8 @@ Once the SDK is successfully installed, use the Sensors Analytics SDK likes:
 ## To learn more
 
 See our [full manual](http://www.sensorsdata.cn/manual/python_sdk.html)
+或者加入神策官方 SDK QQ 讨论群：<br><br>
+![ QQ 讨论群](https://github.com/sensorsdata/sa-sdk-android/raw/master/docs/qrCode.jpeg)
 
 ## License
 

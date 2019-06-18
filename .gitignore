@@ -66,3 +66,12 @@ profile
 
 # AppCode
 .idea
+
+# dist
+/dist/
+
+# MANIFEST
+MANIFEST
+
+#local
+local.properties
