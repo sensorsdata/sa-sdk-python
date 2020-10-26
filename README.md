@@ -16,6 +16,10 @@ SensorsAnalytics SDK 是国内第一家开源商用版用户行为采集 SDK，�
 ## 基本要求
 SDK 兼容 Python 2.6+ 和 Python3 3.X，不依赖第三方库。
 
+## 集成文档
+
+请参考神策官网 [Python SDK 集成文档](https://manual.sensorsdata.cn/sa/latest/tech_sdk_server_python-1573931.html)。
+
 ## 贡献
 
 * 1.  在您的 GitHub 账户下 fork sa-sdk-android 开源项目；
