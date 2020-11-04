@@ -25,7 +25,8 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.10.1'
+SDK_VERSION = '1.10.2'
+batch_consumer_lock = threading.RLock()
 
 try:
     isinstance("", basestring)
@@ -633,21 +634,23 @@ class BatchConsumer(DefaultConsumer):
         self._max_size = min(50, max_size)
 
     def send(self, json_message):
-        self._buffers.append(json_message)
-        if len(self._buffers) >= self._max_size:
-            self.flush()
+        with batch_consumer_lock:
+            self._buffers.append(json_message)
+            if len(self._buffers) >= self._max_size:
+                self.flush()
 
     def flush(self):
         """
         用户可以主动调用 flush 接口，以便在需要的时候立即进行数据发送。
         """
-        while self._buffers:
-            msg_list = self._buffers[:self._max_size]
-            self._do_request({
-                'data_list': self._encode_msg_list(msg_list),
-                'gzip': 1
-            })
-            self._buffers = self._buffers[self._max_size:]
+        with batch_consumer_lock:
+            while self._buffers:
+                msg_list = self._buffers[:self._max_size]
+                self._do_request({
+                    'data_list': self._encode_msg_list(msg_list),
+                    'gzip': 1
+                })
+                self._buffers = self._buffers[self._max_size:]
 
     def close(self):
         """
