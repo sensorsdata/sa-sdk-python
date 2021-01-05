@@ -50,7 +50,7 @@ SDK 兼容 Python 2.6+ 和 Python3 3.X，不依赖第三方库。
 
 ## License
 
-Copyright 2015－2020 Sensors Data Inc.
+Copyright 2015－2021 Sensors Data Inc.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
