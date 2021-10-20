@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 setuptools.setup(
     name="SensorsAnalyticsSDK",
-    version="1.10.2",
+    version="1.10.3",
     author="Jianzhong YUE", # 项目作者
     author_email="yuejianzhong@sensorsdata.cn",
     description="This is the official Python SDK for Sensors Analytics.",

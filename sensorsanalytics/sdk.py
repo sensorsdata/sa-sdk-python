@@ -25,7 +25,7 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.10.2'
+SDK_VERSION = '1.10.3'
 batch_consumer_lock = threading.RLock()
 
 try:
@@ -789,7 +789,10 @@ class DebugConsumer(object):
         """
         debug_url = urlparse(url_prefix)
         ## 将 URI Path 替换成 Debug 模式的 '/debug'
-        debug_url = debug_url._replace(path = '/debug')
+        url_path = debug_url.path
+        index = url_path.rfind('/')
+        debug_url_path = url_path[0:index] + '/debug'
+        debug_url = debug_url._replace(path = debug_url_path)
         
         self._debug_url_prefix = debug_url.geturl()
         self._request_timeout = request_timeout
