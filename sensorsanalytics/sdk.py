@@ -82,34 +82,34 @@ if os.name == 'nt':  # pragma: no cover
     def lock(file_):
         try:
             savepos = file_.tell()
-           
+
             file_.seek(0)
 
             try:
                 msvcrt.locking(file_.fileno(), msvcrt.LK_LOCK, 1)
             except IOError as e:
-                raise SensorsAnalyticsFileLockException(e) 
+                raise SensorsAnalyticsFileLockException(e)
             finally:
                 if savepos:
                     file_.seek(savepos)
         except IOError as e:
-            raise SensorsAnalyticsFileLockException(e) 
+            raise SensorsAnalyticsFileLockException(e)
 
     def unlock(file_):
         try:
             savepos = file_.tell()
             if savepos:
                 file_.seek(0)
-            
+
             try:
                 msvcrt.locking(file_.fileno(), msvcrt.LK_UNLCK, 1)
             except IOError as e:
-                raise SensorsAnalyticsFileLockException(e) 
+                raise SensorsAnalyticsFileLockException(e)
             finally:
                 if savepos:
                     file_.seek(savepos)
         except IOError as e:
-            raise SensorsAnalyticsFileLockException(e) 
+            raise SensorsAnalyticsFileLockException(e)
 
 elif os.name == 'posix':  # pragma: no cover
     import fcntl
@@ -118,17 +118,17 @@ elif os.name == 'posix':  # pragma: no cover
         try:
             fcntl.flock(file_.fileno(), fcntl.LOCK_EX)
         except IOError as e:
-            raise SensorsAnalyticsFileLockException(e) 
+            raise SensorsAnalyticsFileLockException(e)
 
     def unlock(file_):
         fcntl.flock(file_.fileno(), fcntl.LOCK_UN)
 
 else:
-    raise SensorsAnalyticsFileLockException("SensorsAnalytics SDK is defined for NT and POSIX system.") 
+    raise SensorsAnalyticsFileLockException("SensorsAnalytics SDK is defined for NT and POSIX system.")
 
 
 class SAFileLock(object):
-    
+
     def __init__(self, file_handler):
         self._file_handler = file_handler
 
@@ -190,7 +190,7 @@ class SensorsAnalytics(object):
     def _json_dumps(data):
         return json.dumps(data, separators=(',', ':'), cls=SensorsAnalytics.DatetimeSerializer)
 
-    def register_super_properties(self, super_properties): 
+    def register_super_properties(self, super_properties):
         """
         设置每个事件都带有的一些公共属性，当 track 的 properties 和 super properties 有相同的 key 时，将采用 track 的
 
@@ -207,7 +207,7 @@ class SensorsAnalytics(object):
             '$lib_version': SDK_VERSION,
         }
 
-    def track(self, distinct_id, event_name, properties=None, is_login_id=False):
+    def track(self, distinct_id, event_name, identities=None, properties=None, is_login_id=False):
         """
         跟踪一个用户的行为。
 
@@ -215,11 +215,11 @@ class SensorsAnalytics(object):
         :param event_name: 事件名称
         :param properties: 事件的属性
         """
-        all_properties = self._super_properties.copy() 
+        all_properties = self._super_properties.copy()
         if properties:
             all_properties.update(properties)
-        self._track_event('track', event_name, distinct_id, None, all_properties, is_login_id)
- 
+        self._track_event('track', event_name, distinct_id, None, identities, all_properties, is_login_id)
+
     def track_signup(self, distinct_id, original_id, properties=None):
         """
         这个接口是一个较为复杂的功能，请在使用前先阅读相关说明:http://www.sensorsdata.cn/manual/track_signup.html，
@@ -234,11 +234,11 @@ class SensorsAnalytics(object):
             raise SensorsAnalyticsIllegalDataException("property [original_id] must not be empty")
         if len(str(original_id)) > 255:
             raise SensorsAnalyticsIllegalDataException("the max length of property [original_id] is 255")
-       
-        all_properties = self._super_properties.copy() 
+
+        all_properties = self._super_properties.copy()
         if properties:
             all_properties.update(properties)
-        
+
         self._track_event('track_signup', '$SignUp', distinct_id, original_id, all_properties, False)
 
     @staticmethod
@@ -308,7 +308,7 @@ class SensorsAnalytics(object):
             '$lib_method' : 'code',
         }
 
-        if '$app_version' in self._super_properties: 
+        if '$app_version' in self._super_properties:
             lib_properties['$app_version'] = self._super_properties['$app_version']
 
         try:
@@ -319,21 +319,21 @@ class SensorsAnalytics(object):
                 try:
                     file_name = trace[-4][0]
                     line_number = trace[-4][1]
-                    
+
                     if trace[-4][2].startswith('<'):
                         function_name = ''
                     else:
                         function_name = trace[-4][2]
-                   
+
                     try:
                         if len(trace) > 4 and trace[-5][3]:
-                            class_name = trace[-5][3].split('(')[0] 
+                            class_name = trace[-5][3].split('(')[0]
                         else:
                             class_name = ''
                     except:
-                        print(trace.format()) 
+                        print(trace.format())
 
-                    lib_properties['$lib_detail'] = '%s##%s##%s##%s' % (class_name, function_name, file_name, line_number) 
+                    lib_properties['$lib_detail'] = '%s##%s##%s##%s' % (class_name, function_name, file_name, line_number)
                 except:
                     pass
 
@@ -503,7 +503,7 @@ class SensorsAnalytics(object):
         self._consumer.send(self._json_dumps(data))
 
 
-    def _track_event(self, event_type, event_name, distinct_id, original_id, properties, is_login_id):
+    def _track_event(self, event_type, event_name, distinct_id, original_id, identities, properties, is_login_id):
         event_time = self._extract_user_time(properties) or self._now()
         event_token = self._extract_token(properties)
         event_project = self._extract_project(properties)
@@ -512,6 +512,7 @@ class SensorsAnalytics(object):
             'type': event_type,
             'time': event_time,
             'distinct_id': distinct_id,
+            'identities': identities,
             'properties': properties,
             'lib': self._get_lib_properties(),
         }
@@ -793,7 +794,7 @@ class DebugConsumer(object):
         index = url_path.rfind('/')
         debug_url_path = url_path[0:index] + '/debug'
         debug_url = debug_url._replace(path = debug_url_path)
-        
+
         self._debug_url_prefix = debug_url.geturl()
         self._request_timeout = request_timeout
         self._debug_write_data = write_data
@@ -911,7 +912,7 @@ class ConcurrentLoggingConsumer(object):
             self._file.close()
 
         def isValid(self, filename):
-            return self._filename == filename 
+            return self._filename == filename
 
         def write(self, messages):
             with SAFileLock(self._file):
@@ -922,7 +923,7 @@ class ConcurrentLoggingConsumer(object):
 
     @classmethod
     def construct_filename(cls, prefix):
-        return prefix + '.' + datetime.datetime.now().strftime('%Y-%m-%d') 
+        return prefix + '.' + datetime.datetime.now().strftime('%Y-%m-%d')
 
     def __init__(self, prefix, bufferSize=8192):
         self._prefix = prefix
@@ -946,7 +947,7 @@ class ConcurrentLoggingConsumer(object):
         if len(self._buffer) > self._bufferSize:
             messages = self._buffer
 
-            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)    
+            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)
             if not self._writer.isValid(filename):
                 self._writer.close()
                 self._writer = ConcurrentLoggingConsumer.ConcurrentFileWriter(filename)
@@ -954,7 +955,7 @@ class ConcurrentLoggingConsumer(object):
             self._buffer = []
 
         self._mutex.put(1)
-   
+
         if messages:
             self._writer.write(messages)
 
@@ -966,7 +967,7 @@ class ConcurrentLoggingConsumer(object):
         if len(self._buffer) > 0:
             messages = self._buffer
 
-            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)    
+            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)
             if not self._writer.isValid(filename):
                 self._writer.close()
                 self._writer = ConcurrentLoggingConsumer.ConcurrentFileWriter(filename)
@@ -974,7 +975,7 @@ class ConcurrentLoggingConsumer(object):
             self._buffer = []
 
         self._mutex.put(1)
-   
+
         if messages:
             self._writer.write(messages)
 
