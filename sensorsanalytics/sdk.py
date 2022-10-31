@@ -387,14 +387,14 @@ class SensorsAnalytics(object):
             return t
         return None
 
-    def profile_set(self, distinct_id, profiles, is_login_id=False):
+    def profile_set(self, distinct_id, profiles, identities=None, is_login_id=False):
         """
         直接设置一个用户的 Profile，如果已存在则覆盖
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
         """
-        return self._track_event('profile_set', None, distinct_id, None, profiles, is_login_id)
+        return self._track_event('profile_set', None, distinct_id, None, identities, profiles, is_login_id)
 
     def profile_set_once(self, distinct_id, profiles, is_login_id=False):
         """
