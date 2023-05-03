@@ -387,6 +387,12 @@ class SensorsAnalytics(object):
             return t
         return None
 
+    def bind(self, distinct_id: str, identities: dict) -> None:
+        return self._track_event('track_id_bind', '$BindID', distinct_id, None, identities, None, None)
+
+    def unbind(self, distinct_id: str, identities: dict) -> None:
+        return self._track_event('track_id_unbind', '$UnbindID', distinct_id, None, identities, None, None)
+
     def profile_set(self, distinct_id, profiles, identities=None, is_login_id=False):
         """
         直接设置一个用户的 Profile，如果已存在则覆盖
@@ -501,7 +507,6 @@ class SensorsAnalytics(object):
         data = self._normalize_item_data(data)
         self._json_dumps(data)
         self._consumer.send(self._json_dumps(data))
-
 
     def _track_event(self, event_type, event_name, distinct_id, original_id, identities, properties, is_login_id):
         event_time = self._extract_user_time(properties) or self._now()
