@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 import traceback
+from enum import Enum
 
 try:
     from urllib.parse import urlparse
@@ -25,11 +26,13 @@ except ImportError:
     import urllib2
     import urllib
 
-SDK_VERSION = '1.10.3'
+SDK_VERSION = '1.11.0'
 batch_consumer_lock = threading.RLock()
 
 try:
     isinstance("", basestring)
+
+
     def is_str(s):
         return isinstance(s, basestring)
 except NameError:
@@ -37,6 +40,8 @@ except NameError:
         return isinstance(s, str)
 try:
     isinstance(1, long)
+
+
     def is_int(n):
         return isinstance(n, int) or isinstance(n, long)
 except NameError:
@@ -79,56 +84,60 @@ class SensorsAnalyticsDebugException(Exception):
 if os.name == 'nt':  # pragma: no cover
     import msvcrt
 
+
     def lock(file_):
         try:
             savepos = file_.tell()
-           
+
             file_.seek(0)
 
             try:
                 msvcrt.locking(file_.fileno(), msvcrt.LK_LOCK, 1)
             except IOError as e:
-                raise SensorsAnalyticsFileLockException(e) 
+                raise SensorsAnalyticsFileLockException(e)
             finally:
                 if savepos:
                     file_.seek(savepos)
         except IOError as e:
-            raise SensorsAnalyticsFileLockException(e) 
+            raise SensorsAnalyticsFileLockException(e)
+
 
     def unlock(file_):
         try:
             savepos = file_.tell()
             if savepos:
                 file_.seek(0)
-            
+
             try:
                 msvcrt.locking(file_.fileno(), msvcrt.LK_UNLCK, 1)
             except IOError as e:
-                raise SensorsAnalyticsFileLockException(e) 
+                raise SensorsAnalyticsFileLockException(e)
             finally:
                 if savepos:
                     file_.seek(savepos)
         except IOError as e:
-            raise SensorsAnalyticsFileLockException(e) 
+            raise SensorsAnalyticsFileLockException(e)
 
 elif os.name == 'posix':  # pragma: no cover
     import fcntl
+
 
     def lock(file_):
         try:
             fcntl.flock(file_.fileno(), fcntl.LOCK_EX)
         except IOError as e:
-            raise SensorsAnalyticsFileLockException(e) 
+            raise SensorsAnalyticsFileLockException(e)
+
 
     def unlock(file_):
         fcntl.flock(file_.fileno(), fcntl.LOCK_UN)
 
 else:
-    raise SensorsAnalyticsFileLockException("SensorsAnalytics SDK is defined for NT and POSIX system.") 
+    raise SensorsAnalyticsFileLockException("SensorsAnalytics SDK is defined for NT and POSIX system.")
 
 
 class SAFileLock(object):
-    
+
     def __init__(self, file_handler):
         self._file_handler = file_handler
 
@@ -139,12 +148,15 @@ class SAFileLock(object):
     def __exit__(self, t, v, tb):
         unlock(self._file_handler)
 
+
 class SensorsAnalytics(object):
     """
     使用一个 SensorsAnalytics 的实例来进行数据发送。
     """
 
-    NAME_PATTERN = re.compile(r"^((?!^distinct_id$|^original_id$|^time$|^properties$|^id$|^first_id$|^second_id$|^users$|^events$|^event$|^user_id$|^date$|^datetime$)[a-zA-Z_$][a-zA-Z\d_$]{0,99})$", re.I)
+    NAME_PATTERN = re.compile(
+        r"^((?!^distinct_id$|^original_id$|^time$|^properties$|^id$|^first_id$|^second_id$|^users$|^events$|^event$|^event_id$|^device_id$|^user_id$|^date$|^datetime$|^user_group|^user_tag)[a-zA-Z_$][a-zA-Z\d_$]{0,99})$",
+        re.I)
 
     class DatetimeSerializer(json.JSONEncoder):
         """
@@ -155,8 +167,8 @@ class SensorsAnalytics(object):
             if isinstance(obj, datetime.datetime):
                 head_fmt = "%Y-%m-%d %H:%M:%S"
                 return "{main_part}.{ms_part}".format(
-                        main_part=obj.strftime(head_fmt),
-                        ms_part=int(obj.microsecond/1000))
+                    main_part=obj.strftime(head_fmt),
+                    ms_part=int(obj.microsecond / 1000))
             elif isinstance(obj, datetime.date):
                 fmt = '%Y-%m-%d'
                 return obj.strftime(fmt)
@@ -180,7 +192,7 @@ class SensorsAnalytics(object):
         self._default_project_name = project_name
         self._enable_time_free = enable_time_free
         self._super_properties = {}
-        self.clear_super_properties();
+        self.clear_super_properties()
 
     @staticmethod
     def _now():
@@ -190,7 +202,7 @@ class SensorsAnalytics(object):
     def _json_dumps(data):
         return json.dumps(data, separators=(',', ':'), cls=SensorsAnalytics.DatetimeSerializer)
 
-    def register_super_properties(self, super_properties): 
+    def register_super_properties(self, super_properties):
         """
         设置每个事件都带有的一些公共属性，当 track 的 properties 和 super properties 有相同的 key 时，将采用 track 的
 
@@ -214,12 +226,13 @@ class SensorsAnalytics(object):
         :param distinct_id: 用户的唯一标识
         :param event_name: 事件名称
         :param properties: 事件的属性
+        :param is_login_id 是否是登陆 ID
         """
-        all_properties = self._super_properties.copy() 
+        all_properties = self._super_properties.copy()
         if properties:
             all_properties.update(properties)
         self._track_event('track', event_name, distinct_id, None, all_properties, is_login_id)
- 
+
     def track_signup(self, distinct_id, original_id, properties=None):
         """
         这个接口是一个较为复杂的功能，请在使用前先阅读相关说明:http://www.sensorsdata.cn/manual/track_signup.html，
@@ -234,38 +247,47 @@ class SensorsAnalytics(object):
             raise SensorsAnalyticsIllegalDataException("property [original_id] must not be empty")
         if len(str(original_id)) > 255:
             raise SensorsAnalyticsIllegalDataException("the max length of property [original_id] is 255")
-       
-        all_properties = self._super_properties.copy() 
+
+        all_properties = self._super_properties.copy()
         if properties:
             all_properties.update(properties)
-        
+
         self._track_event('track_signup', '$SignUp', distinct_id, original_id, all_properties, False)
 
     @staticmethod
     def _normalize_properties(data):
         if "properties" in data and data["properties"] is not None:
             for key, value in data["properties"].items():
-                if not is_str(key):
-                    raise SensorsAnalyticsIllegalDataException("property key must be a str. [key=%s]" % str(key))
-                if len(key) > 255:
-                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 256. [key=%s]" % str(key))
-                if not SensorsAnalytics.NAME_PATTERN.match(key):
-                    raise SensorsAnalyticsIllegalDataException(
-                        "property key must be a valid variable name. [key=%s]" % str(key))
+                SensorsAnalytics._assert_key(key)
+                SensorsAnalytics._assert_value(value, key)
 
-                if is_str(value) and len(value) > 8191:
-                    raise SensorsAnalyticsIllegalDataException("the max length of property key is 8192. [key=%s]" % str(key))
+    @staticmethod
+    def _assert_key(key):
+        if not is_str(key):
+            raise SensorsAnalyticsIllegalDataException("property key must be a str. [key=%s]" % str(key))
+        if len(key) > 255:
+            raise SensorsAnalyticsIllegalDataException(
+                "the max length of property key is 256. [key=%s]" % str(key))
+        if not SensorsAnalytics.NAME_PATTERN.match(key):
+            raise SensorsAnalyticsIllegalDataException(
+                "property key must be a valid variable name. [key=%s]" % str(key))
 
-                if not is_str(value) and not is_int(value) and not isinstance(value, float)\
-                        and not isinstance(value, datetime.datetime) and not isinstance(value, datetime.date)\
-                        and not isinstance(value, list) and value is not None:
+    @staticmethod
+    def _assert_value(value, key=None):
+        if is_str(value) and len(value) > 8191:
+            raise SensorsAnalyticsIllegalDataException(
+                "the max length of property key is 8192. [key=%s]" % str(key))
+
+        if not is_str(value) and not is_int(value) and not isinstance(value, float) \
+                and not isinstance(value, datetime.datetime) and not isinstance(value, datetime.date) \
+                and not isinstance(value, list) and value is not None:
+            raise SensorsAnalyticsIllegalDataException(
+                "property value must be a str/int/float/datetime/date/list. [value=%s]" % type(value))
+        if isinstance(value, list):
+            for lvalue in value:
+                if not is_str(lvalue):
                     raise SensorsAnalyticsIllegalDataException(
-                        "property value must be a str/int/float/datetime/date/list. [value=%s]" % type(value))
-                if isinstance(value, list):
-                    for lvalue in value:
-                        if not is_str(lvalue):
-                            raise SensorsAnalyticsIllegalDataException(
-                                "[list] property's value must be a str. [value=%s]" % type(lvalue))
+                        "[list] property's value must be a str. [value=%s]" % type(lvalue))
 
     @staticmethod
     def _normalize_data(data):
@@ -283,7 +305,7 @@ class SensorsAnalytics(object):
         ts = int(data['time'])
         ts_num = len(str(ts))
         if ts_num < 10 or ts_num > 13:
-                raise SensorsAnalyticsIllegalDataException("property [time] must be a timestamp in microseconds")
+            raise SensorsAnalyticsIllegalDataException("property [time] must be a timestamp in microseconds")
 
         if ts_num == 10:
             ts *= 1000
@@ -291,11 +313,13 @@ class SensorsAnalytics(object):
 
         # 检查 Event Name
         if 'event' in data and not SensorsAnalytics.NAME_PATTERN.match(data['event']):
-            raise SensorsAnalyticsIllegalDataException("event name must be a valid variable name. [name=%s]" % data['event'])
+            raise SensorsAnalyticsIllegalDataException(
+                "event name must be a valid variable name. [name=%s]" % data['event'])
 
         # 检查 Event Name
         if 'project' in data and not SensorsAnalytics.NAME_PATTERN.match(data['project']):
-            raise SensorsAnalyticsIllegalDataException("project name must be a valid variable name. [project=%s]" % data['project'])
+            raise SensorsAnalyticsIllegalDataException(
+                "project name must be a valid variable name. [project=%s]" % data['project'])
 
         # 检查 properties
         SensorsAnalytics._normalize_properties(data)
@@ -303,12 +327,12 @@ class SensorsAnalytics(object):
 
     def _get_lib_properties(self):
         lib_properties = {
-            '$lib' : 'python',
-            '$lib_version' : SDK_VERSION,
-            '$lib_method' : 'code',
+            '$lib': 'python',
+            '$lib_version': SDK_VERSION,
+            '$lib_method': 'code',
         }
 
-        if '$app_version' in self._super_properties: 
+        if '$app_version' in self._super_properties:
             lib_properties['$app_version'] = self._super_properties['$app_version']
 
         try:
@@ -319,21 +343,22 @@ class SensorsAnalytics(object):
                 try:
                     file_name = trace[-4][0]
                     line_number = trace[-4][1]
-                    
+
                     if trace[-4][2].startswith('<'):
                         function_name = ''
                     else:
                         function_name = trace[-4][2]
-                   
+
                     try:
                         if len(trace) > 4 and trace[-5][3]:
-                            class_name = trace[-5][3].split('(')[0] 
+                            class_name = trace[-5][3].split('(')[0]
                         else:
                             class_name = ''
                     except:
-                        print(trace.format()) 
+                        print(trace.format())
 
-                    lib_properties['$lib_detail'] = '%s##%s##%s##%s' % (class_name, function_name, file_name, line_number) 
+                    lib_properties['$lib_detail'] = '%s##%s##%s##%s' % (
+                        class_name, function_name, file_name, line_number)
                 except:
                     pass
 
@@ -352,7 +377,6 @@ class SensorsAnalytics(object):
             common_properties['$app_version'] = self._app_version
 
         return common_properties
-
 
     @staticmethod
     def _extract_user_time(properties):
@@ -393,6 +417,7 @@ class SensorsAnalytics(object):
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
+        :param is_login_id: distinct_id 是否是登陆 id
         """
         return self._track_event('profile_set', None, distinct_id, None, profiles, is_login_id)
 
@@ -402,8 +427,9 @@ class SensorsAnalytics(object):
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
+        :param is_login_id: distinct_id 是否是登陆 id
         """
-        return self._track_event('profile_set_once', None, distinct_id,  None, profiles, is_login_id)
+        return self._track_event('profile_set_once', None, distinct_id, None, profiles, is_login_id)
 
     def profile_increment(self, distinct_id, profiles, is_login_id=False):
         """
@@ -411,7 +437,14 @@ class SensorsAnalytics(object):
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
+        :param is_login_id: distinct_id 是否是登陆 id
         """
+        if isinstance(profiles, dict):
+            for key, value in profiles.items():
+                if not is_int(value):
+                    raise SensorsAnalyticsIllegalDataException("property value must be Number. [key=%s]" % str(key))
+        else:
+            raise SensorsAnalyticsIllegalDataException("profiles must be dict type.")
         return self._track_event('profile_increment', None, distinct_id,  None, profiles, is_login_id)
 
     def profile_append(self, distinct_id, profiles, is_login_id=False):
@@ -420,7 +453,14 @@ class SensorsAnalytics(object):
 
         :param distinct_id: 用户的唯一标识
         :param profiles: 用户属性
+        :param is_login_id: distinct_id 是否是登陆 id
         """
+        if isinstance(profiles, dict):
+            for key, value in profiles.items():
+                if not isinstance(value,list):
+                    raise SensorsAnalyticsIllegalDataException("property value must be list. [key=%s]" % str(key))
+        else:
+            raise SensorsAnalyticsIllegalDataException("profiles must be dict type.")
         return self._track_event('profile_append', None, distinct_id, None, profiles, is_login_id)
 
     def profile_unset(self, distinct_id, profile_keys, is_login_id=False):
@@ -429,6 +469,7 @@ class SensorsAnalytics(object):
 
         :param distinct_id: 用户的唯一标识
         :param profile_keys: 用户属性键值列表
+        :param is_login_id: distinct_id 是否是登陆 id
         """
         if isinstance(profile_keys, list):
             profile_keys = dict((key, True) for key in profile_keys)
@@ -439,6 +480,7 @@ class SensorsAnalytics(object):
         删除整个用户的信息。
 
         :param distinct_id: 用户的唯一标识
+        :param is_login_id: distinct_id 是否是登陆 id
         """
         return self._track_event('profile_delete', None, distinct_id, None, {}, is_login_id)
 
@@ -448,7 +490,7 @@ class SensorsAnalytics(object):
 
         :param item_type: 物品类型
         :param item_id: 物品的唯一标识
-        :param profiles: 物品属性
+        :param properties: 物品属性
         """
         return self._track_item('item_set', item_type, item_id, properties)
 
@@ -458,7 +500,7 @@ class SensorsAnalytics(object):
 
         :param item_type: 物品类型
         :param item_id: 物品的唯一标识
-        :param profiles: 物品属性
+        :param properties: 物品属性
         """
         return self._track_item('item_delete', item_type, item_id, properties)
 
@@ -502,8 +544,7 @@ class SensorsAnalytics(object):
         self._json_dumps(data)
         self._consumer.send(self._json_dumps(data))
 
-
-    def _track_event(self, event_type, event_name, distinct_id, original_id, properties, is_login_id):
+    def _track_event(self, event_type, event_name, distinct_id, original_id, properties, is_login_id, *identities):
         event_time = self._extract_user_time(properties) or self._now()
         event_token = self._extract_token(properties)
         event_project = self._extract_project(properties)
@@ -515,19 +556,28 @@ class SensorsAnalytics(object):
             'properties': properties,
             'lib': self._get_lib_properties(),
         }
+
+        if identities:
+            identities_data = dict()
+            for identity in identities:
+                identities_data[identity.key] = identity.value
+            data["identities"] = identities_data
+
         if self._default_project_name is not None:
             data['project'] = self._default_project_name
 
-        if event_type == "track" or event_type == "track_signup":
+        if event_type == EventType.TRACK.value or event_type == EventType.TRACK_SIGNUP.value \
+                or event_type == EventType.TRACK_ID_BIND.value \
+                or event_type == EventType.TRACK_ID_UNBIND.value:
             data["event"] = event_name
 
-        if event_type == "track_signup":
+        if event_type == EventType.TRACK_SIGNUP.value:
             data["original_id"] = original_id
 
         if self._enable_time_free:
             data["time_free"] = True
 
-        if is_login_id:
+        if is_login_id or self._is_identity_has_login_id(*identities):
             properties["$is_login_id"] = True
 
         if event_token is not None:
@@ -538,6 +588,15 @@ class SensorsAnalytics(object):
 
         data = self._normalize_data(data)
         self._consumer.send(self._json_dumps(data))
+
+    @staticmethod
+    def _is_identity_has_login_id(*identities):
+        if not identities:
+            return False
+        for identity in identities:
+            if identity.key == SensorsAnalyticsIdentity.LOGIN_ID:
+                return True
+        return False
 
     def flush(self):
         """
@@ -551,6 +610,159 @@ class SensorsAnalytics(object):
         如果发生意外，此方法将抛出异常。
         """
         self._consumer.close()
+
+    @staticmethod
+    def _check_identity_type(*identities):
+        if not identities:
+            raise SensorsAnalyticsIllegalDataException("Identity (or list) can not be none or empty")
+        key_repeat_map = {}
+        duplicate_keys = set()
+        for identity in identities:
+            if not isinstance(identity, SensorsAnalyticsIdentity):
+                raise SensorsAnalyticsIllegalDataException("Identity type must be SensorsAnalyticsIdentity")
+            SensorsAnalytics._assert_key(identity.key)
+            if not is_str(identity.value):
+                raise SensorsAnalyticsIllegalDataException("identity value must be a str. [key=%s]" % str(identity.key))
+            if not len(identity.value.strip()):
+                raise SensorsAnalyticsIllegalDataException("identity value is empty. [key=%s]" % str(identity.key))
+            if len(identity.value) > 255:
+                raise SensorsAnalyticsIllegalDataException(
+                    "the max length of property value is 256. [key=%s]" % str(identity.key))
+            count = key_repeat_map.get(identity.key, 0)
+            count += 1
+            key_repeat_map[identity.key] = count
+            if count > 1:
+                duplicate_keys.add(identity.key)
+        if duplicate_keys:
+            raise SensorsAnalyticsIllegalDataException("Identity has duplicate key. [key=%s]" % str(duplicate_keys))
+
+    @staticmethod
+    def _get_distinct_id(*identities):
+        if not identities:
+            return None
+        distinct_id = "%s+%s" % (identities[0].key, identities[0].value)
+        for identity in identities:
+            if SensorsAnalyticsIdentity.LOGIN_ID == identity.key:
+                distinct_id = identity.value
+                break
+        return distinct_id
+
+    def bind(self, first_identity, second_identity, *other_identities):
+        """
+        绑定用户标识。至少需要提供两个用户标识信息。identity 的数据类型为 SensorsAnalyticsIdentity
+
+        :param first_identity 待绑定的用户标识，
+        :param second_identity 待绑定的用户标识
+        :param other_identities 其他需要绑定的用户标识
+        """
+        SensorsAnalytics._check_identity_type(first_identity, second_identity, *other_identities)
+        all_properties = self._super_properties.copy()
+        self._track_event(EventType.TRACK_ID_BIND.value, "$BindID",
+                          SensorsAnalytics._get_distinct_id(first_identity, second_identity, *other_identities),
+                          None, all_properties, None, first_identity, second_identity, *other_identities)
+
+    def unbind(self, identity):
+        """
+        解绑用户标识
+        :param identity SensorsAnalyticsIdentity
+        """
+        SensorsAnalytics._check_identity_type(identity)
+        # if identity.key == SensorsAnalyticsIdentity.LOGIN_ID:
+        #     raise SensorsAnalyticsIllegalDataException("Can not unbind login id.")
+        all_properties = self._super_properties.copy()
+        self._track_event(EventType.TRACK_ID_UNBIND.value, "$UnbindID", SensorsAnalytics._get_distinct_id(identity),
+                          None, all_properties, None, identity)
+
+    def track_by_id(self, event_name, properties, *identities):
+        """
+        使用用户标识 3.0 进行事件埋点
+        :param event_name 事件名
+        :param properties 事件属性，数据类型为 dict
+        :param identities 用户标识
+        """
+        SensorsAnalytics._check_identity_type(*identities)
+        all_properties = self._super_properties.copy()
+        if properties:
+            if not isinstance(properties, dict):
+                raise SensorsAnalyticsIllegalDataException("properties must be a dict type.")
+            all_properties.update(properties)
+        self._track_event(EventType.TRACK.value, event_name,
+                          SensorsAnalytics._get_distinct_id(*identities),
+                          None, all_properties, None, *identities)
+
+    def profile_set_by_id(self, properties, *identities):
+        """
+        设置用户的属性。如果要设置的 properties 的 key，之前在这个用户的 profile 中已经存在，则覆盖，否则，新创建
+        :param properties 用户属性
+        :param identities 用户标识，类型是 SensorsAnalyticsIdentity
+        """
+        self._profile_options_by_id(EventType.PROFILE_SET, properties, *identities)
+
+    def profile_set_once_by_id(self, properties, *identities):
+        """
+        首次设置用户的属性。与  profile_set_by_id 接口不同的是：如果被设置的用户属性已存在，则这条记录会被忽略而不会覆盖已有数据，如果属性不存在则会自动创建
+        :param properties 用户属性
+        :param identities 用户标识，类型是 SensorsAnalyticsIdentity
+        """
+        self._profile_options_by_id(EventType.PROFILE_SET_ONCE, properties, *identities)
+
+    def profile_unset_by_id(self, profile_keys, *identities):
+        """
+        删除用户某一个属性
+        :param profile_keys: 用户属性键值列表
+        :param identities 用户标识，类型是 SensorsAnalyticsIdentity
+        """
+        if isinstance(profile_keys, list):
+            profile_keys = dict((key, True) for key in profile_keys)
+        else:
+            raise SensorsAnalyticsIllegalDataException("profile_keys must be a list.")
+        self._profile_options_by_id(EventType.PROFILE_UNSET, profile_keys, *identities)
+
+    def profile_append_by_id(self, profiles, *identities):
+        """
+        追加一个用户的某一个或者多个集合类型的 Profile。
+        :param profiles 用户属性，其 key 必须是 str 类型，value 必须是 str 集合类型
+        :param identities 用户标识，类型是 SensorsAnalyticsIdentity
+        """
+        if isinstance(profiles, dict):
+            for key, value in profiles.items():
+                if not isinstance(value, list):
+                    raise SensorsAnalyticsIllegalDataException("property value must be list. [key=%s]" % str(key))
+        else:
+            raise SensorsAnalyticsIllegalDataException("profiles must be dict type.")
+        self._profile_options_by_id(EventType.PROFILE_APPEND, profiles, *identities)
+
+    def profile_delete_by_id(self, *identities):
+        """
+        删除用户的所有属性
+        :param identities 用户标识，类型是 SensorsAnalyticsIdentity
+        """
+        self._profile_options_by_id(EventType.PROFILE_DELETE, {}, *identities)
+
+    def profile_increment_by_id(self, profiles, *identities):
+        """
+        为用户的一个或多个数值类型的属性累加一个数值，若该属性不存在，则创建它并设置默认值为 0。属性取值只接受 Number类型。
+        :param profiles 用户属性，类型是 dict，value 必须是 Number 类型
+        :param identities 用户标识，可以是 identity、list、tuple
+        """
+        if isinstance(profiles, dict):
+            for key, value in profiles.items():
+                if not is_int(value):
+                    raise SensorsAnalyticsIllegalDataException("property value must be Number. [key=%s]" % str(key))
+        else:
+            raise SensorsAnalyticsIllegalDataException("profiles must be dict type.")
+        self._profile_options_by_id(EventType.PROFILE_INCREMENT, profiles, *identities)
+
+    def _profile_options_by_id(self, event_type, properties, *identities):
+        if not (event_type == EventType.PROFILE_DELETE):
+            if not properties:
+                raise SensorsAnalyticsIllegalDataException("Properties can not be None or Empty")
+            if not isinstance(properties, dict):
+                raise SensorsAnalyticsIllegalDataException("Properties type must be dict")
+        SensorsAnalytics._check_identity_type(*identities)
+        self._track_event(event_type.value, None, SensorsAnalytics._get_distinct_id(*identities), None, properties,
+                          None, *identities)
+
 
 class DefaultConsumer(object):
     """
@@ -792,8 +1004,8 @@ class DebugConsumer(object):
         url_path = debug_url.path
         index = url_path.rfind('/')
         debug_url_path = url_path[0:index] + '/debug'
-        debug_url = debug_url._replace(path = debug_url_path)
-        
+        debug_url = debug_url._replace(path=debug_url_path)
+
         self._debug_url_prefix = debug_url.geturl()
         self._request_timeout = request_timeout
         self._debug_write_data = write_data
@@ -819,7 +1031,7 @@ class DebugConsumer(object):
         encoded_data = urllib.urlencode(data).encode('utf8')
         try:
             request = urllib2.Request(self._debug_url_prefix, encoded_data)
-            if not self._debug_write_data:      # 说明只检查,不真正写入数据
+            if not self._debug_write_data:  # 说明只检查,不真正写入数据
                 request.add_header('Dry-Run', 'true')
             if self._request_timeout is not None:
                 response = urllib2.urlopen(request, timeout=self._request_timeout)
@@ -896,6 +1108,7 @@ class LoggingConsumer(object):
     def close(self):
         self.logger.handlers[0].close()
 
+
 class ConcurrentLoggingConsumer(object):
     """
     将数据输出到指定路径，并按天切割，支持多进程并行输出到同一个文件名
@@ -911,7 +1124,7 @@ class ConcurrentLoggingConsumer(object):
             self._file.close()
 
         def isValid(self, filename):
-            return self._filename == filename 
+            return self._filename == filename
 
         def write(self, messages):
             with SAFileLock(self._file):
@@ -922,7 +1135,7 @@ class ConcurrentLoggingConsumer(object):
 
     @classmethod
     def construct_filename(cls, prefix):
-        return prefix + '.' + datetime.datetime.now().strftime('%Y-%m-%d') 
+        return prefix + '.' + datetime.datetime.now().strftime('%Y-%m-%d')
 
     def __init__(self, prefix, bufferSize=8192):
         self._prefix = prefix
@@ -946,7 +1159,7 @@ class ConcurrentLoggingConsumer(object):
         if len(self._buffer) > self._bufferSize:
             messages = self._buffer
 
-            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)    
+            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)
             if not self._writer.isValid(filename):
                 self._writer.close()
                 self._writer = ConcurrentLoggingConsumer.ConcurrentFileWriter(filename)
@@ -954,7 +1167,7 @@ class ConcurrentLoggingConsumer(object):
             self._buffer = []
 
         self._mutex.put(1)
-   
+
         if messages:
             self._writer.write(messages)
 
@@ -966,7 +1179,7 @@ class ConcurrentLoggingConsumer(object):
         if len(self._buffer) > 0:
             messages = self._buffer
 
-            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)    
+            filename = ConcurrentLoggingConsumer.construct_filename(self._prefix)
             if not self._writer.isValid(filename):
                 self._writer.close()
                 self._writer = ConcurrentLoggingConsumer.ConcurrentFileWriter(filename)
@@ -974,10 +1187,43 @@ class ConcurrentLoggingConsumer(object):
             self._buffer = []
 
         self._mutex.put(1)
-   
+
         if messages:
             self._writer.write(messages)
 
     def close(self):
         self.flush()
         self._writer.close()
+
+
+# ID-Mapping 3 业务逻辑
+class SensorsAnalyticsIdentity(object):
+    LOGIN_ID = "$identity_login_id"
+    """
+    用户登录 id
+    """
+    MOBILE = "$identity_mobile"
+    """
+    手机号
+    """
+    EMAIL = "$identity_email"
+    """
+    邮箱
+    """
+
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+
+
+class EventType(Enum):
+    TRACK = "track"
+    TRACK_SIGNUP = "track_signup"
+    TRACK_ID_BIND = "track_id_bind"
+    TRACK_ID_UNBIND = "track_id_unbind"
+    PROFILE_SET = "profile_set"
+    PROFILE_SET_ONCE = "profile_set_once"
+    PROFILE_UNSET = "profile_unset"
+    PROFILE_APPEND = "profile_append"
+    PROFILE_DELETE = "profile_delete"
+    PROFILE_INCREMENT = "profile_increment"

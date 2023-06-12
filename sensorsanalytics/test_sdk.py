@@ -127,7 +127,7 @@ class NormalTest(unittest.TestCase):
         sa.track('1234', 'Test', {'From': 'Baidu'})
         sa.track_signup('1234', 'abcd', {'Channel': 'Hongbao'})
         sa.profile_delete('1234')
-        sa.profile_append('1234', {'Gender': 'Male'})
+        sa.profile_append('1234', {'Gender': ['Male']})
         sa.profile_increment('1234', {'CardNum': 1})
         sa.profile_set('1234', {'City': '北京'})
         sa.profile_unset('1234', ['City'])
@@ -141,7 +141,7 @@ class NormalTest(unittest.TestCase):
         sa.track('1234', 'Test', {'From': 'Baidu'})
         sa.track_signup('1234', 'abcd', {'Channel': 'Hongbao'})
         sa.profile_delete('1234')
-        sa.profile_append('1234', {'Gender': 'Male'})
+        sa.profile_append('1234', {'Gender': ['Male']})
         self.assertEqual(self.msg_counter, 0)
         sa.profile_increment('1234', {'CardNum': 1})
         self.assertEqual(self.msg_counter, 5)
@@ -161,7 +161,7 @@ class NormalTest(unittest.TestCase):
         sa.track('1234', 'Test', {'From': 'Baidu'})
         sa.track_signup('1234', 'abcd', {'Channel': 'Hongbao'})
         sa.profile_delete('1234')
-        sa.profile_append('1234', {'Gender': 'Male'})
+        sa.profile_append('1234', {'Gender': ["male", "femal"]})
         self.assertEqual(self.msg_counter, 0)
         sa.profile_increment('1234', {'CardNum': 1})
         time.sleep(0.1)
@@ -179,6 +179,34 @@ class NormalTest(unittest.TestCase):
         sa.close()
         time.sleep(0.1)
         self.assertEqual(self.msg_counter, 9)
+
+    def testIDM3(self):
+        consumer = DefaultConsumer(TEST_URL_PREFIX)
+        # consumer._do_request = self.mock_request
+        sa = SensorsAnalytics(consumer)
+
+        # sa.bind(SensorsAnalyticsIdentity("s1", "sv1"), SensorsAnalyticsIdentity("s2", "sv2"), SensorsAnalyticsIdentity("s3", "sv3"))
+        # sa.bind(SensorsAnalyticsIdentity("s1", "sv1"), SensorsAnalyticsIdentity("s2", "sv2"), SensorsAnalyticsIdentity(SensorsAnalyticsIdentity.LOGIN_ID, "sv3"))
+        # sa.unbind(SensorsAnalyticsIdentity(SensorsAnalyticsIdentity.EMAIL, "sv1"))
+
+        # sa.track_by_id("hello", None, SensorsAnalyticsIdentity(SensorsAnalyticsIdentity.LOGIN_ID, "sv1"), SensorsAnalyticsIdentity("s2", "sv2"))
+
+        # sa.profile_set_by_id({"p1": "v1"}, SensorsAnalyticsIdentity("s1", "sv1"))
+        # sa.profile_unset_by_id(["k1", "k2"], SensorsAnalyticsIdentity("s1", "sv1"))
+
+        # sa.profile_append("sss", {"k1": "ss"}, False)
+
+        # sa.profile_append_by_id({"k1": ["a1", "a2", "a3"]}, SensorsAnalyticsIdentity("s1", "sv1"),
+        #                         SensorsAnalyticsIdentity("s2", "sv2"))
+
+        # sa.profile_delete_by_id(SensorsAnalyticsIdentity("s1", "sv1"),
+        #                         SensorsAnalyticsIdentity("s2", "sv2"))
+
+        # sa.profile_increment_by_id({"age": "123"}, SensorsAnalyticsIdentity("s1", "sv1"))
+
+        sa.flush()
+        time.sleep(2)
+        pass
 
 
 if __name__ == '__main__':
